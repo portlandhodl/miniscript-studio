@@ -15,6 +15,3 @@ export const parseKey = (k) => call(ms.parse_key, k);
 export const generateKey = (entropyHex, network) => call(ms.generate_key, entropyHex, network);
 export const lifehashRGBA = (input, moduleSize = 1) => ms.lifehash_rgba(input, moduleSize);
 export const version = () => ms.version();
-export const newMnemonic = (entropyHex) => call(ms.new_mnemonic, entropyHex);
-export const mnemonicKey = (words, passphrase, network, account = 0) =>
-  call(ms.mnemonic_key, words, passphrase, network, account);

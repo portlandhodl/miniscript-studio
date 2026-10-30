@@ -543,30 +543,6 @@ pub fn generate_key(entropy_hex: &str, network: &str) -> String {
     hex_decode(entropy_hex).and_then(|seed| account_key(&seed, network, 0)).map(ok).unwrap_or_else(err)
 }
 
-/// Creates a BIP-39 mnemonic from 16 or 32 bytes of caller-supplied entropy.
-#[wasm_bindgen]
-pub fn new_mnemonic(entropy_hex: &str) -> String {
-    let run = || -> Result<Value, String> {
-        let entropy = hex_decode(entropy_hex)?;
-        let m = bip39::Mnemonic::from_entropy(&entropy).map_err(|e| e.to_string())?;
-        Ok(json!({ "words": m.words().collect::<Vec<_>>() }))
-    };
-    run().map(ok).unwrap_or_else(err)
-}
-
-/// Restores a BIP-39 mnemonic (+ optional passphrase) and returns its BIP-48 account xpub.
-#[wasm_bindgen]
-pub fn mnemonic_key(words: &str, passphrase: &str, network: &str, account: u32) -> String {
-    let run = || -> Result<Value, String> {
-        let normalized = words.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
-        let m = bip39::Mnemonic::parse_normalized(&normalized).map_err(|e| e.to_string())?;
-        let mut v = account_key(&m.to_seed(passphrase), network, account)?;
-        v["word_count"] = json!(m.word_count());
-        Ok(v)
-    };
-    run().map(ok).unwrap_or_else(err)
-}
-
 /// LifeHash (version 2) of a UTF-8 string as raw RGBA pixels (32x32 per module).
 #[wasm_bindgen]
 pub fn lifehash_rgba(input: &str, module_size: usize) -> Vec<u8> {
@@ -619,26 +595,6 @@ mod tests {
             assert_eq!(imported["ok"], true, "{}", imported);
             println!("import {}", imported["policy"]);
         }
-    }
-
-    #[test]
-    fn mnemonic_matches_bip39_vector() {
-        // BIP-39 test vector: all-zero entropy, passphrase "TREZOR".
-        let v: Value = serde_json::from_str(&new_mnemonic(&"00".repeat(16))).unwrap();
-        let words = v["words"].as_array().unwrap().iter().map(|w| w.as_str().unwrap()).collect::<Vec<_>>().join(" ");
-        assert_eq!(words, "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about");
-        let k: Value = serde_json::from_str(&mnemonic_key(&words, "TREZOR", "bitcoin", 0)).unwrap();
-        assert_eq!(k["ok"], true, "{}", k);
-        // Master xprv from the official BIP-39 vector; the account key must hang off it.
-        let m = bip39::Mnemonic::parse_normalized(&words).unwrap();
-        let master = Xpriv::new_master(NetworkKind::Main, &m.to_seed("TREZOR")).unwrap();
-        assert_eq!(
-            master.to_string(),
-            "xprv9s21ZrQH143K3h3fDYiay8mocZ3afhfULfb5GX8kCBdno77K4HiA15Tg23wpbeF1pLfs1c5SPmYHrEpTuuRhxMwvKDwqdKiGJS9XFKzUsAF"
-        );
-        assert_eq!(k["fingerprint"], master.fingerprint(&Secp256k1::new()).to_string());
-        let bad: Value = serde_json::from_str(&mnemonic_key("abandon abandon", "", "bitcoin", 0)).unwrap();
-        assert_eq!(bad["ok"], false);
     }
 
     #[test]

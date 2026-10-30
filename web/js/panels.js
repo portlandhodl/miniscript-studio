@@ -7,7 +7,7 @@ import { custodyPhases, evaluate } from './policy.js';
 import { parseKey } from './wasm.js';
 import {
   $, $$, esc, fmtDuration, fmtInt, fmtDate, olderSeconds, olderIsTime, afterIsTime, afterSecondsFromNow,
-  estimateTipHeight, nowSec, SEQUENCE_TYPE_FLAG, copyText, randomHex, hexToBytes, sha256Hex, download, toast,
+  estimateTipHeight, nowSec, SEQUENCE_TYPE_FLAG, copyText, randomHex, hexToBytes, sha256Hex, download, toast, privateMaterial,
 } from './util.js';
 
 const DAY = 86400;
@@ -161,14 +161,13 @@ export class Panels {
         <textarea data-f="key" rows="4" class="mono" spellcheck="false" placeholder="[d34db33f/48h/0h/0h/2h]xpub…/&lt;0;1&gt;/*">${esc(n.key)}</textarea></label>
       <div id="key-feedback">${this.keyFeedback(info, mismatch)}</div>
       <div class="btn-row">
-        <button class="btn btn--primary" data-do="create">${icon('sparkle')} Create seed words</button>
-        <button class="btn" data-do="restore">${icon('import')} Restore</button>
+        <button class="btn btn--primary" data-do="xpub">${icon('hardware')} Add your xpub</button>
       </div>
       <div class="btn-row">
         <button class="btn btn--ghost" data-do="gen">${icon('dice')} New demo key</button>
         <button class="btn btn--ghost" data-do="copykey" ${n.key ? '' : 'disabled'}>${icon('copy')} Copy</button>
       </div>
-      ${n.origin ? `<div class="callout callout--info">${icon('shield')}<span>${n.origin === 'created' ? 'Created from seed words in this browser.' : 'Restored from your seed words.'} Only the xpub is kept; the words were never stored. Your backup is the paper you wrote them on.</span></div>` : ''}
+      <p class="caption">Public keys only. Export the xpub from your hardware wallet or coordinator; seed words and private keys are refused.</p>
       ${n.seed ? `<div class="callout callout--info">${icon('alert')}<span>Demo key from a public seed. <b>Never send real funds to it.</b> Paste your own xpub to design a real wallet.</span></div>` : ''}
       <div class="section-title">Used in ${uses} place${uses === 1 ? '' : 's'}</div>
       <p class="caption">A key block is one signing device. Wire it into several paths and each use gets its own derivation branch (<code>&lt;0;1&gt;</code>, <code>&lt;2;3&gt;</code>, …), the same approach Liana uses, so miniscript never sees a duplicate key.</p>`;
@@ -287,11 +286,18 @@ export class Panels {
     on('[data-f="name"]', 'input', (e) => m.update(n.id, { name: e.target.value }, 'inspector'));
     on('[data-f="role"]', 'change', (e) => (m.update(n.id, { role: e.target.value }), m.commit()));
     on('[data-f="key"]', 'input', (e) => {
+      const secret = privateMaterial(e.target.value);
+      if (secret) {
+        // Never keep private material: not in the block, history, storage or share links.
+        e.target.value = n.key || '';
+        $('#key-feedback').innerHTML = `<div class="callout callout--bad">${icon('alert')}<span>That looked like <b>${secret}</b>. It was discarded. Paste only an xpub / public key.</span></div>`;
+        return;
+      }
       const raw = e.target.value.trim();
       const info = raw ? parseKey(raw) : null;
       const mismatch = info?.ok && info.mainnet != null && info.mainnet !== (m.state.network === 'bitcoin');
       $('#key-feedback').innerHTML = this.keyFeedback(info, mismatch);
-      m.update(n.id, { key: info?.ok ? info.key : raw, seed: null, origin: null }, 'inspector');
+      m.update(n.id, { key: info?.ok ? info.key : raw, seed: null, origin: info?.ok ? 'xpub' : null }, 'inspector');
     });
     on('[data-f="key"]', 'change', () => (m.commit(), this.renderInspector()));
     on('[data-do="gen"]', 'click', () => {
@@ -301,8 +307,7 @@ export class Panels {
       this.renderInspector();
     });
     on('[data-do="copykey"]', 'click', () => copyText(n.key));
-    on('[data-do="create"]', 'click', () => app.keys.open(n.id, 'create'));
-    on('[data-do="restore"]', 'click', () => app.keys.open(n.id, 'restore'));
+    on('[data-do="xpub"]', 'click', () => app.keys.open(n.id));
 
     // Timelocks
     on('[data-seg="older-mode"] button', 'click', (e) => {

@@ -187,3 +187,16 @@ export function download(filename, text) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
+
+/**
+ * Detects private key material (extended private keys, WIF, seed words) so it can be
+ * refused before it is parsed, stored or shared. Returns a reason string or null.
+ */
+export function privateMaterial(text) {
+  const t = String(text || '').trim();
+  if (!t) return null;
+  if (/(^|[^1-9A-HJ-NP-Za-km-z])[xtyzuvYZUV]prv[1-9A-HJ-NP-Za-km-z]{100,}/.test(t)) return 'an extended private key (xprv/tprv)';
+  if (/(^|[^1-9A-HJ-NP-Za-km-z])[5KLc9][1-9A-HJ-NP-Za-km-z]{50,51}($|[^1-9A-HJ-NP-Za-km-z])/.test(t)) return 'a WIF private key';
+  if (/^([a-z]{3,8}[\s,]+){11,23}[a-z]{3,8}$/.test(t.toLowerCase())) return 'seed words';
+  return null;
+}

@@ -8,7 +8,7 @@
 
 - **Block canvas.** Keys, relative and absolute timelocks, hashlocks, *All of / Any of / Threshold*. Drag from the palette, wire output to input, pan and zoom, tidy auto-layout, undo/redo.
 - **Live compilation (WASM).** The rust-miniscript policy compiler targets P2WSH or Taproot (with automatic key-path extraction and a NUMS internal key otherwise). You get the policy, miniscript, descriptor (multipath `<0;1>/*`), annotated script ASM, tapleaves, and sanity/malleability analysis.
-- **Create or restore your own keys.** Generate fresh BIP-39 seed words (12 or 24) in the browser, or restore existing ones, with an optional passphrase and account number. The BIP-48 account xpub is derived in WASM and shown with its LifeHash. Words are never stored and are wiped when the dialog closes.
+- **Bring your own xpub.** Paste the xpub exported by your hardware wallet or coordinator, with or without its key origin, and preview it with its LifeHash. Public keys only: seed words, xprvs and WIF keys are detected, refused and never stored.
 - **Key reuse done right.** One key block equals one signing device. Wire it into several paths and each extra use gets its own derivation branch (`<2;3>/*`, `<4;5>/*`, …), so miniscript never sees a duplicate key.
 - **Custody over time.** For every moment a new path unlocks: signers needed, keys you can lose, and keys a thief would need. There is also an unlock timeline and per-path input cost from rust-miniscript's spend planner.
 - **Disaster simulator.** Mark devices as lost, reveal secrets and scrub time forward. Blocks light up as they are satisfied, and you learn whether funds are spendable now, recoverable later, or gone for good.
