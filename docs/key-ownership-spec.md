@@ -120,8 +120,12 @@ exactly one result, checked in this order:
 | **known device** | Only the origin fingerprint matches a signer | Amber: same device, account not in the manifest |
 | **unknown** | Nothing matches | Grey |
 
-When the `kid` matches but the descriptor's origin is missing or differs from the manifest,
-the result is still *ours*/*known*, with a warning that hardware signers may not recognise the key.
+When the `kid` matches but the descriptor's origin is missing or differs from the manifest
+(a **blinded** origin, e.g. a `00000000` or decoy fingerprint, or a different path), the result
+is still *ours*/*known*: the key id depends only on the key material, so blinding the origin
+does not hide ownership. The reader shows the signer's **true** fingerprint, path and (if the
+manifest has it) xpub next to what the descriptor claims, and warns that hardware signers may
+not recognise the key until the true origin is restored.
 
 ## Rejection
 
@@ -144,8 +148,12 @@ the source.
   that tab's memory. It is never saved, uploaded or included in share links.
 - The dialog lists every signer (label, group, fingerprint, key count) with a checkbox: tick
   the ones you control. The selection, not the keys, is remembered per file (by its sha256).
-- Key blocks get an **ours / known / known device / unknown / conflict** badge; the key
-  inspector explains the match (path, account, status, origin warnings).
+- Key blocks get an **ours / known / known device / unknown / conflict** badge (plus
+  *blinded* when the origin is hidden or differs). Clicking the badge, or *Show manifest
+  entry* in the key inspector, opens the manifest entry side by side with the descriptor:
+  master fingerprint, path, xpub and key id, with differences highlighted.
+- For a blinded origin, **Restore true origin** rewrites only the key's origin to the
+  manifest's fingerprint and path. The script and addresses do not change.
 - **Paths** marks each spending path *we can sign alone* or *needs N other signers*;
   **Wallet** summarises "N of M keys ours".
 - **Import**: when a descriptor's keys are in the manifest, the signer-naming step pre-fills

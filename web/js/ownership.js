@@ -78,15 +78,18 @@ export class Ownership {
     if (this.cache.has(key)) return this.cache.get(key);
     const m = JSON.parse(this.manifest.matchKey(key));
     let r;
+    // `entry` is the manifest's record; `descriptor` is what the design's key itself claims.
     if (m.result === 'match') {
-      r = { kind: this.controlled.has(m.signer.id) ? 'owned' : 'known', signer: m.signer, path: m.path, account: m.account, status: m.status, originMismatch: m.originMismatch };
+      const { signer, path, xpub, kid, account, status } = m;
+      r = { kind: this.controlled.has(signer.id) ? 'owned' : 'known', signer, path, account, status, originMismatch: m.originMismatch, entry: { path, xpub, kid, account, status } };
     } else if (m.result === 'conflict') {
-      r = { kind: 'conflict', signer: m.claimed.signer, path: m.claimed.path };
+      r = { kind: 'conflict', signer: m.claimed.signer, path: m.claimed.path, entry: m.claimed };
     } else if (m.result === 'known-device') {
       r = { kind: 'device', signer: m.signer };
     } else {
       r = { kind: 'unknown' };
     }
+    r.descriptor = m.descriptor;
     this.cache.set(key, r);
     return r;
   }
@@ -100,12 +103,15 @@ export const OWNERSHIP_CHIPS = {
   unknown: ['chip--muted', 'unknown'],
 };
 
+/** True when the descriptor's origin hides or misstates the signer the key really belongs to. */
+export const isBlinded = (r) => !!r?.originMismatch;
+
 /** One-line explanation of a match, for tooltips and the inspector. */
 export function describeMatch(r) {
   const who = r.signer ? `${r.signer.label}${r.signer.group ? ` (${r.signer.group})` : ''}` : '';
   switch (r.kind) {
-    case 'owned': return `Ours: ${who}`;
-    case 'known': return `Known signer you don’t control: ${who}`;
+    case 'owned': return `Ours: ${who}${isBlinded(r) ? ' (origin blinded or different in the descriptor)' : ''}`;
+    case 'known': return `Known signer you don’t control: ${who}${isBlinded(r) ? ' (origin blinded or different in the descriptor)' : ''}`;
     case 'conflict': return `Claims to be ${who} at ${r.path}, but the key material does not match. Possible key substitution.`;
     case 'device': return `Same device as ${who}, but this account is not in the manifest.`;
     default: return 'Not in the manifest.';

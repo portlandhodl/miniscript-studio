@@ -240,6 +240,7 @@ export class Canvas {
       const btn = e.target.closest('[data-act]');
       const id = e.target.closest('.node')?.dataset.id;
       if (!btn || !id) return;
+      if (btn.dataset.act === 'own') return this.app.showOwnership(id);
       const n = this.model.node(id);
       if (btn.dataset.act === 'k-' && n.k > 1) this.model.update(id, { k: n.k - 1 });
       if (btn.dataset.act === 'k+' && n.k < n.inputs.length) this.model.update(id, { k: n.k + 1 });

@@ -67,7 +67,7 @@ function keyBody(n, app) {
           ${n.seed ? '<span class="chip chip--muted">demo</span>'
             : n.origin === 'xpub' ? '<span class="chip chip--wallet">your xpub</span>'
             : n.key ? '<span class="chip chip--ok">custom</span>' : ''}
-          ${own ? `<span class="chip ${ownCls}" title="${esc(describeMatch(own))}">${ownText}</span>` : ''}
+          ${own ? `<button class="chip chip--own ${ownCls}" data-act="own" title="${esc(describeMatch(own))}. Click for details">${ownText}${own.originMismatch ? ' · blinded' : ''}</button>` : ''}
           ${uses > 1 ? `<span class="chip chip--key" title="Each extra use is derived on its own multipath branch">${uses} paths</span>` : ''}
         </div>
       </div>

@@ -207,6 +207,12 @@
     </div>
   </dialog>
 
+  <dialog id="own-key-dialog" class="dialog dialog--wide">
+    <div class="dialog__head"><h3 id="ok-title">Key ownership</h3><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <div id="ok-body"></div>
+    <div class="dialog__foot" id="ok-foot"></div>
+  </dialog>
+
   <dialog id="help-dialog" class="dialog dialog--wide">
     <div class="dialog__head"><h3>About Miniscript Studio</h3><button class="icon-btn" data-close aria-label="Close">✕</button></div>
     <div class="about">
@@ -227,7 +233,7 @@
         </ul></div>
       </div>
       <h4>Key ownership</h4>
-      <p><b>Ownership</b> loads a <b>Key Ownership Manifest</b> (<code>.kom.json</code>): your organisation’s public keys, grouped by signer. Tick the signers you control and every key in the design is marked <b>ours</b>, <b>known</b> (a signer you know but don’t control), <b>known device</b> (right fingerprint, account not listed) or <b>unknown</b>. A <b>conflict</b> means a key claims a known signer’s fingerprint and path but its key material is different: treat it as a possible key substitution. <b>Paths</b> then shows which spending paths you can sign alone.</p>
+      <p><b>Ownership</b> loads a <b>Key Ownership Manifest</b> (<code>.kom.json</code>): your organisation’s public keys, grouped by signer. Tick the signers you control and every key in the design is marked <b>ours</b>, <b>known</b> (a signer you know but don’t control), <b>known device</b> (right fingerprint, account not listed) or <b>unknown</b>. A <b>conflict</b> means a key claims a known signer’s fingerprint and path but its key material is different: treat it as a possible key substitution. <b>Paths</b> then shows which spending paths you can sign alone. Click a badge to see the manifest entry next to the descriptor’s key. If the descriptor <b>blinds</b> the origin (a <code>00000000</code> or decoy fingerprint, a different path, or no origin), the key still matches by its key material. The true fingerprint, path and xpub are shown, and <b>Restore true origin</b> fixes the key without changing the script or addresses.</p>
       <ul>
         <li>Inventories in any layout are converted to the manifest format first; the format is documented in the <a id="help-spec" target="_blank" rel="noopener">Key Ownership Manifest spec</a>.</li>
         <li>Validation is strict: one malformed entry, unknown field or any private key material rejects the whole file, and the message never quotes the value.</li>

@@ -5,6 +5,7 @@ import { lifehash, lifehashImg } from './lifehash.js';
 import { blockSummary, decaySchedule, ladderHTML } from './blocks.js';
 import { custodyPhases, evaluate } from './policy.js';
 import { parseKey } from './wasm.js';
+import { describeMatch } from './ownership.js';
 import {
   $, $$, esc, fmtDuration, fmtInt, fmtDate, olderSeconds, olderIsTime, afterIsTime, afterSecondsFromNow,
   estimateTipHeight, nowSec, SEQUENCE_TYPE_FLAG, copyText, randomHex, hexToBytes, sha256Hex, download, toast, privateMaterial,
@@ -188,7 +189,8 @@ export class Panels {
       fingerprint: 'The origin fingerprint differs from the manifest: hardware signers may not recognise it.',
       path: 'The origin path differs from the manifest: hardware signers may not recognise it.',
     }[r.originMismatch];
-    return `<div class="callout ${cls}">${icon(r.kind === 'owned' ? 'shield' : 'alert')}<span><b>Ownership:</b> ${esc(describeMatch(r))}${extra ? `<br><small>${extra}</small>` : ''}${mismatch ? `<br>${mismatch}` : ''}</span></div>`;
+    return `<div class="callout ${cls}">${icon(r.kind === 'owned' ? 'shield' : 'alert')}<span><b>Ownership:</b> ${esc(describeMatch(r))}${extra ? `<br><small>${extra}</small>` : ''}${mismatch ? `<br>${mismatch}` : ''}
+      <br><button class="btn btn--ghost btn--sm" data-do="own-details">Show manifest entry</button></span></div>`;
   }
 
   keyFeedback(info, mismatch) {
@@ -330,6 +332,7 @@ export class Panels {
     });
     on('[data-do="copykey"]', 'click', () => copyText(n.key));
     on('[data-do="xpub"]', 'click', () => app.keys.open(n.id));
+    on('[data-do="own-details"]', 'click', () => app.showOwnership(n.id));
 
     // Timelocks
     on('[data-seg="older-mode"] button', 'click', (e) => {

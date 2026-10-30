@@ -64,6 +64,8 @@ struct Signer {
 
 struct Entry {
     signer: u32,
+    kid: [u8; 16],
+    xpub: Option<String>,
     path: Option<String>,
     account: Option<u64>,
     status: Option<String>,
@@ -253,6 +255,7 @@ fn load(src: &str) -> Result<Manifest, String> {
             }
         };
         let sfp = signers[signer as usize].fingerprint;
+        let mut xpub_s = None;
         if let Some(x) = cell("xpub") {
             let x = x.as_str().ok_or(format!("{}: must be a string or null", at("xpub")))?;
             let xpub = Xpub::from_str(x).map_err(|_| format!("{}: not a valid extended public key (checksum, version or length)", at("xpub")))?;
@@ -279,6 +282,7 @@ fn load(src: &str) -> Result<Manifest, String> {
             if kid(&xpub) != k {
                 return Err(format!("{}: does not match the xpub", at("kid")));
             }
+            xpub_s = Some(x.to_string());
         }
         if by_kid.insert(k, r as u32).is_some() {
             return Err(format!("{}: duplicate key (each key belongs to exactly one signer)", at("kid")));
@@ -289,7 +293,7 @@ fn load(src: &str) -> Result<Manifest, String> {
             }
         }
         signers[signer as usize].keys += 1;
-        entries.push(Entry { signer, path: path_s.map(str::to_string), account, status });
+        entries.push(Entry { signer, kid: k, xpub: xpub_s, path: path_s.map(str::to_string), account, status });
     }
     Ok(Manifest { network, signers, entries, by_kid, by_origin, by_fp })
 }
@@ -309,6 +313,14 @@ fn looks_private_anywhere(src: &str) -> bool {
         i = at + 3;
     }
     false
+}
+
+fn path_string(p: &[u32]) -> String {
+    let mut s = String::from("m");
+    for &c in p {
+        s += &if c >= 0x8000_0000 { format!("/{}h", c & 0x7fff_ffff) } else { format!("/{c}") };
+    }
+    s
 }
 
 fn signer_json(s: &Signer, id: u32) -> Value {
@@ -346,11 +358,21 @@ impl Manifest {
         let by_origin = origin.as_ref().and_then(|o| self.by_origin.get(o).copied());
         let entry = |r: u32| {
             let e = &self.entries[r as usize];
-            json!({ "signer": signer_json(&self.signers[e.signer as usize], e.signer), "path": e.path, "account": e.account, "status": e.status })
+            json!({
+                "signer": signer_json(&self.signers[e.signer as usize], e.signer), "path": e.path,
+                "xpub": e.xpub, "kid": to_hex(&e.kid), "account": e.account, "status": e.status,
+            })
         };
+        // What the descriptor itself claims, for side-by-side display with the manifest.
+        let claimed = json!({
+            "fingerprint": origin.as_ref().map(|(fp, _)| to_hex(fp)),
+            "path": origin.as_ref().map(|(_, p)| path_string(p)),
+            "xpub": xkey.map(|x| x.to_string()),
+            "kid": xkey.map(|x| to_hex(&kid(&x))),
+        });
         if let Some(r) = by_origin {
             if by_kid != Some(r) {
-                return json!({ "result": "conflict", "claimed": entry(r) }).to_string();
+                return json!({ "result": "conflict", "claimed": entry(r), "descriptor": claimed }).to_string();
             }
         }
         if let Some(r) = by_kid {
@@ -365,12 +387,13 @@ impl Manifest {
             let mut v = entry(r);
             v["result"] = "match".into();
             v["originMismatch"] = mismatch.into();
+            v["descriptor"] = claimed;
             return v.to_string();
         }
         if let Some(&s) = origin.as_ref().and_then(|(fp, _)| self.by_fp.get(fp)) {
-            return json!({ "result": "known-device", "signer": signer_json(&self.signers[s as usize], s) }).to_string();
+            return json!({ "result": "known-device", "signer": signer_json(&self.signers[s as usize], s), "descriptor": claimed }).to_string();
         }
-        json!({ "result": "unknown" }).to_string()
+        json!({ "result": "unknown", "descriptor": claimed }).to_string()
     }
 }
 

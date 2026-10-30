@@ -9,7 +9,7 @@ import { parsePolicy, buildBlocks } from './parse.js';
 import { TEMPLATES } from './templates.js';
 import { KeyDialog } from './keydialog.js';
 import { lifehashImg } from './lifehash.js';
-import { Ownership, OWNERSHIP_CHIPS, SPEC_URL, describeMatch } from './ownership.js';
+import { Ownership, OWNERSHIP_CHIPS, SPEC_URL, describeMatch, isBlinded } from './ownership.js';
 import { icon, ROLES } from './icons.js';
 import { $, $$, h, esc, toast, copyText, seedHex, randomHex, hexToBytes, sha256Hex, compress, decompress, privateMaterial } from './util.js';
 
@@ -152,6 +152,73 @@ class App {
     this.refresh();
     requestAnimationFrame(() => this.canvas.fit({ animate: false }));
     this.panels.setTab('paths');
+  }
+
+  // -- ownership details ---------------------------------------------------
+  /**
+   * Shows a key block's manifest entry side by side with what the descriptor claims, so a
+   * blinded or wrong origin (fingerprint / path) reveals the signer's true fingerprint,
+   * path and xpub.
+   */
+  showOwnership(id) {
+    const n = this.model.node(id);
+    const r = this.ownership.match(n?.key);
+    if (!r) return;
+    const d = r.descriptor ?? {};
+    const e = r.entry ?? {};
+    const trueFp = r.signer?.fingerprint ?? null;
+    const [cls, text] = OWNERSHIP_CHIPS[r.kind];
+    const val = (v, none = '—') => (v == null ? `<span class="muted">${none}</span>` : `<span class="mono">${esc(String(v))}</span>`);
+    const row = (label, mine, theirs, { none = '—', theirsNone = '—' } = {}) => {
+      const diff = mine != null && theirs != null && mine !== theirs || (mine == null) !== (theirs == null) && theirs != null;
+      return `<tr class="${diff ? 'is-diff' : ''}"><td>${label}</td><td>${val(mine, none)}</td>
+        <td>${val(theirs, theirsNone)}${!diff && theirs != null ? ' <span class="ok-same">✓ same</span>' : ''}</td></tr>`;
+    };
+    const blindedFp = d.fingerprint && trueFp && d.fingerprint !== trueFp;
+    let lead;
+    if (r.kind === 'conflict') {
+      lead = `<div class="callout callout--bad">${icon('alert')}<span>This key claims to be <b>${esc(r.signer.label)}</b> at <code>${esc(r.path)}</code>, but the manifest has a <b>different key</b> there. Treat it as a possible key substitution and verify on the signing device.</span></div>`;
+    } else if (r.kind === 'owned' || r.kind === 'known') {
+      const why = !d.fingerprint ? 'The descriptor has <b>no key origin</b>.'
+        : blindedFp ? `The descriptor’s master fingerprint is <b>${d.fingerprint === '00000000' ? 'blinded (00000000)' : 'blinded or wrong'}</b>.`
+        : isBlinded(r) ? 'The descriptor’s <b>derivation path</b> differs from the manifest.' : '';
+      lead = isBlinded(r)
+        ? `<div class="callout callout--warn">${icon('alert')}<span>${why} The key material still matches <b>${esc(r.signer.label)}</b>: its true origin is shown on the right. Hardware signers usually need the true origin to sign.</span></div>`
+        : `<div class="callout ${r.kind === 'owned' ? 'callout--ok' : 'callout--info'}">${icon('shield')}<span>${esc(describeMatch(r))}. The descriptor’s origin matches the manifest.</span></div>`;
+    } else {
+      lead = `<div class="callout callout--info">${icon('alert')}<span>${esc(describeMatch(r))}</span></div>`;
+    }
+    $('#ok-title').innerHTML = `${esc(n.label)} <span class="chip ${cls}">${text}</span>`;
+    $('#ok-body').innerHTML = `${lead}
+      ${r.signer ? `<div class="own-meta"><b>${esc(r.signer.label)}</b>${r.signer.group ? `<span>${esc(r.signer.group)}</span>` : ''}${r.signer.role ? `<span>${esc(r.signer.role)}</span>` : ''}
+        ${e.account != null ? `<span>account ${e.account}</span>` : ''}${e.status ? `<span>${esc(e.status)}</span>` : ''}<span>from ${esc(this.ownership.name)}</span></div>` : ''}
+      <table class="ok-table">
+        <thead><tr><th></th><th>In this descriptor</th><th>${r.kind === 'conflict' ? 'Manifest key at that origin' : 'Manifest (true)'}</th></tr></thead>
+        <tbody>
+          ${row('Master fingerprint', d.fingerprint, trueFp, { none: 'none (no origin)', theirsNone: r.signer ? 'not recorded' : '—' })}
+          ${row('Path', d.path, e.path, { none: 'none (no origin)', theirsNone: r.signer ? 'not recorded' : '—' })}
+          ${row('xpub', d.xpub, e.xpub, { theirsNone: e.kid ? 'not in manifest (key-id only)' : '—' })}
+          ${row('Key id', d.kid, e.kid)}
+        </tbody>
+      </table>
+      ${r.kind === 'owned' || r.kind === 'known' ? '<p class="caption">The key id is computed from the key material alone, which is why a blinded origin still matches.</p>' : ''}`;
+    const canRestore = (r.kind === 'owned' || r.kind === 'known') && isBlinded(r) && trueFp && e.path;
+    $('#ok-foot').innerHTML = `
+      ${e.xpub ? `<button class="btn btn--ghost" data-ok="copy">${icon('copy')} Copy manifest xpub</button>` : ''}
+      ${canRestore ? `<button class="btn" data-ok="restore" title="Rewrites only the key origin; the script and addresses do not change">Restore true origin</button>` : ''}
+      <button class="btn btn--primary" data-close type="button">Done</button>`;
+    const dlg = $('#own-key-dialog');
+    $('[data-close]', $('#ok-foot')).addEventListener('click', () => dlg.close());
+    $('[data-ok="copy"]', $('#ok-foot'))?.addEventListener('click', () => copyText(e.xpub));
+    $('[data-ok="restore"]', $('#ok-foot'))?.addEventListener('click', () => {
+      const restored = parseKey(`[${trueFp}/${e.path.replace(/^m\/?/, '')}]${n.key.replace(/^\[[^\]]*\]/, '')}`);
+      if (!restored.ok) return toast(restored.error, 'warn');
+      this.model.update(n.id, { key: restored.key });
+      this.model.commit();
+      dlg.close();
+      toast('True origin restored. The script and addresses are unchanged');
+    });
+    if (!dlg.open) dlg.showModal();
   }
 
   // -- keys ----------------------------------------------------------------
