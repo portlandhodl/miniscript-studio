@@ -270,6 +270,19 @@ class App {
     if (!this.demo && m.keyNodes().length) toast('Template loaded: add an xpub to each key block');
   }
 
+  /** Resets the current workspace to an empty wallet, keeping network and script type. Undoable. */
+  clearWorkspace() {
+    const m = this.model;
+    if (Object.keys(m.nodes).length <= 1) return toast('The workspace is already empty');
+    const { network, context } = m.state;
+    m.state = Model.empty();
+    Object.assign(m.state, { network, context });
+    this.panels.sim = { available: null, known: new Set(), elapsed: 0 };
+    this.afterRebuild();
+    $('#template-name').textContent = 'Blank canvas';
+    toast('Workspace cleared. Undo (⌘Z) restores it');
+  }
+
   afterRebuild() {
     this.canvas.selected = null;
     this.refresh();
@@ -545,6 +558,7 @@ function bindToolbar(app) {
   $('#btn-undo').addEventListener('click', () => app.model.undo());
   $('#btn-redo').addEventListener('click', () => app.model.redo());
   $('#btn-share').addEventListener('click', () => app.share());
+  $('#btn-clear').addEventListener('click', () => app.clearWorkspace());
   $('#btn-layout').addEventListener('click', () => (app.canvas.autoLayout(), setTimeout(() => app.canvas.fit(), 460)));
   $('#btn-fit').addEventListener('click', () => app.canvas.fit());
   $('#btn-zoom-in').addEventListener('click', () => app.canvas.zoomBy(1.2));
