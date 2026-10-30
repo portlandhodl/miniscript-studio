@@ -270,16 +270,20 @@ class App {
     if (!this.demo && m.keyNodes().length) toast('Template loaded: add an xpub to each key block');
   }
 
-  /** Resets the current workspace to an empty wallet, keeping network and script type. Undoable. */
+  /** Resets the current workspace to exactly what a first visit shows. Undoable. */
   clearWorkspace() {
     const m = this.model;
-    if (Object.keys(m.nodes).length <= 1) return toast('The workspace is already empty');
-    const { network, context } = m.state;
-    m.state = Model.empty();
-    Object.assign(m.state, { network, context });
+    const blank = TEMPLATES.find((t) => t.id === 'blank');
+    const fresh = Model.empty();
+    fresh.context = blank.context;
+    fresh.nodes[fresh.rootId].name = blank.name;
+    const same = (a, b) => JSON.stringify({ ...a, nodes: null }) === JSON.stringify({ ...b, nodes: null })
+      && Object.keys(a.nodes).length === 1 && a.nodes[a.rootId].name === b.nodes[b.rootId].name;
+    if (same(m.state, fresh)) return toast('The workspace is already empty');
+    m.state = fresh;
     this.panels.sim = { available: null, known: new Set(), elapsed: 0 };
     this.afterRebuild();
-    $('#template-name').textContent = 'Blank canvas';
+    $('#template-name').textContent = blank.name;
     toast('Workspace cleared. Undo (⌘Z) restores it');
   }
 
@@ -366,9 +370,9 @@ class App {
 
   async share() {
     const data = await compress(JSON.stringify(this.model.state));
+    // Only the copied link carries the design; this tab keeps saving to local storage.
     const url = new URL(location.href);
     url.hash = `s=${data}`;
-    history.replaceState(null, '', url);
     copyText(url.href);
     toast(`Share link copied: the whole design lives in the URL${this.demo ? ' (opens in demo mode)' : ''}`);
   }
@@ -613,6 +617,8 @@ async function restore(app) {
       if (hasDemoKeys(state)) await app.setDemo(true, { open: false });
       app.model.load(state, { resetHistory: true });
       app.persist();
+      // The link has been copied into the workspace; drop it so reloads keep later edits.
+      history.replaceState(null, '', location.pathname + location.search);
       return true;
     } catch (e) {
       toast('That share link could not be read', 'warn');
