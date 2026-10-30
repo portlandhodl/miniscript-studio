@@ -2,7 +2,7 @@
 import { TYPES, hasInputs } from './model.js';
 import { icon, ROLES } from './icons.js';
 import { lifehashImg } from './lifehash.js';
-import { ownershipBadge, describeMatch } from './ownership.js';
+import { ownershipBadge, describeMatch, isBlinded } from './ownership.js';
 import {
   esc, fmtDuration, fmtInt, fmtDate, olderSeconds, olderIsTime, afterIsTime, afterSecondsFromNow,
   describeOlder,
@@ -57,7 +57,8 @@ function keyBody(n, app) {
   const uses = app.model.parentsOf(n.id).length;
   const fp = /^\[([0-9a-f]{8})/.exec(n.key || '')?.[1];
   const own = app.ownership.match(n.key);
-  const { cls: ownCls, text: ownText } = own ? ownershipBadge(own) : {};
+  // Two rows: status chips (incl. "blinded"), then the signer's name, which may truncate.
+  const { cls: ownCls, text: ownText } = own ? ownershipBadge(own, { blinded: false }) : {};
   return `
     <div class="key-card">
       ${lifehashImg(n.key, 'lifehash--lg')}
@@ -67,9 +68,10 @@ function keyBody(n, app) {
           ${n.seed ? '<span class="chip chip--muted">demo</span>'
             : n.origin === 'xpub' ? '<span class="chip chip--wallet">your xpub</span>'
             : n.key ? '<span class="chip chip--ok">custom</span>' : ''}
-          ${own ? `<button class="chip chip--own ${ownCls}" data-act="own" title="${esc(describeMatch(own))}. Click for details">${esc(ownText)}</button>` : ''}
           ${uses > 1 ? `<span class="chip chip--key" title="Each extra use is derived on its own multipath branch">${uses} paths</span>` : ''}
+          ${isBlinded(own) ? '<span class="chip chip--warn" title="The descriptor hides or misstates this key’s origin">blinded</span>' : ''}
         </div>
+        ${own ? `<div class="chips"><button class="chip chip--own ${ownCls}" data-act="own" title="${esc(describeMatch(own))}. Click for details">${esc(ownText)}</button></div>` : ''}
       </div>
     </div>`;
 }
