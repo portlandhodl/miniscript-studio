@@ -13,8 +13,18 @@ import { icon, ROLES } from './icons.js';
 import { $, $$, h, esc, toast, copyText, seedHex, randomHex, hexToBytes, sha256Hex, compress, decompress, privateMaterial } from './util.js';
 
 const STORAGE_KEY = 'miniscript-studio:v1';
+const DEMO_STORAGE_KEY = 'miniscript-studio:demo:v1';
 const DEMO_PARAM = 'demo';
 const truthy = (v) => /^(1|true|yes|on)$/i.test(v ?? '');
+const hasDemoKeys = (state) => Object.values(state.nodes).some((n) => n.type === 'key' && n.seed);
+
+function readState(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key)) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 class App {
   constructor() {
@@ -49,8 +59,6 @@ class App {
   // -- core loop -----------------------------------------------------------
   refresh(kind = 'full') {
     const m = this.model;
-    // A design holding demo keys (share link, undo, saved state) always shows the demo warning.
-    if (!this.demo && this.hasDemoKeys()) this.setDemo(true, { render: false });
     this.built = buildPolicy(m);
     this.nodeErrors = new Map();
     for (const e of this.built.errors) if (!this.nodeErrors.has(e.id)) this.nodeErrors.set(e.id, e.msg);
@@ -84,37 +92,64 @@ class App {
 
   persist() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.model.state));
+      localStorage.setItem(this.storageKey(), JSON.stringify(this.model.state));
     } catch { /* quota or private mode */ }
     this.updateChrome();
   }
 
   // -- demo mode -----------------------------------------------------------
-  hasDemoKeys() {
-    return this.model.keyNodes().some((k) => k.seed);
+  // Demo mode is a separate workspace with its own saved design, so demo keys never
+  // mix with the user's own: leaving it brings back their previous design (or a blank one).
+  storageKey() {
+    return this.demo ? DEMO_STORAGE_KEY : STORAGE_KEY;
   }
 
-  /** Turns demo mode on or off; leaving it strips demo keys from the design (undoable). */
-  setDemo(on, { render = true } = {}) {
-    this.demo = !!on;
-    document.body.classList.toggle('is-demo', this.demo);
-    $('#demo-banner').hidden = !this.demo;
+  async setDemo(on, { open = true } = {}) {
+    on = !!on;
+    const changed = on !== this.demo;
+    if (open && changed) this.persist();
+    this.demo = on;
+    document.body.classList.toggle('is-demo', on);
+    $('#demo-banner').hidden = !on;
     const btn = $('#btn-demo');
-    btn.classList.toggle('is-active', this.demo);
-    btn.setAttribute('aria-pressed', String(this.demo));
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', String(on));
     const url = new URL(location.href);
-    if (this.demo) url.searchParams.set(DEMO_PARAM, 'true');
+    if (on) url.searchParams.set(DEMO_PARAM, 'true');
     else url.searchParams.delete(DEMO_PARAM);
+    if (open && changed) url.hash = '';
     history.replaceState(null, '', url);
     buildPalette(this);
-    if (!this.demo && this.hasDemoKeys()) {
-      const demoKeys = this.model.keyNodes().filter((k) => k.seed);
-      for (const k of demoKeys) this.model.update(k.id, { key: '', seed: null, origin: null });
-      this.model.commit();
-      toast(`Removed ${demoKeys.length} demo key${demoKeys.length === 1 ? '' : 's'}. Undo restores them (and demo mode).`);
-    } else if (render) {
-      this.panels.render();
+    // Templates are worked examples built on demo keys, so they live in demo mode only.
+    $('#template-wrap').hidden = !on;
+    $('#template-menu').classList.remove('is-open');
+    if (open && changed) {
+      await this.openWorkspace();
+      toast(on ? 'Demo workspace: demo keys are public, never fund them' : 'Back to your workspace');
     }
+  }
+
+  /** Shows the saved design for the current mode, or its starting point. */
+  async openWorkspace() {
+    const saved = readState(this.storageKey());
+    if (saved) {
+      this.model.load(saved, { resetHistory: true });
+      this.showWorkspace();
+      return;
+    }
+    // Professional default: an empty wallet. Demo mode opens on a worked example.
+    await this.loadTemplate(this.demo ? TEMPLATES[0] : TEMPLATES.find((t) => t.id === 'blank'));
+    this.model.clearHistory();
+    this.updateChrome();
+  }
+
+  showWorkspace() {
+    this.canvas.selected = null;
+    this.panels.sim = { available: null, known: new Set(), elapsed: 0 };
+    $('#template-name').textContent = this.model.root.name;
+    this.refresh();
+    requestAnimationFrame(() => this.canvas.fit({ animate: false }));
+    this.panels.setTab('paths');
   }
 
   // -- keys ----------------------------------------------------------------
@@ -548,26 +583,31 @@ function bindToolbar(app) {
   window.addEventListener('resize', () => app.canvas.renderWires());
 }
 
+/** Loads a share link if present, otherwise the saved workspace for the current mode. */
 async function restore(app) {
+  // Designs saved before demo mode existed may hold demo keys: move them to the demo workspace.
+  const legacy = readState(STORAGE_KEY);
+  if (legacy && hasDemoKeys(legacy)) {
+    if (!localStorage.getItem(DEMO_STORAGE_KEY)) localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(legacy));
+    localStorage.removeItem(STORAGE_KEY);
+  }
   const m = /#s=([A-Za-z0-9_-]+)/.exec(location.hash);
   if (m) {
     try {
-      app.model.load(JSON.parse(await decompress(m[1])), { resetHistory: true });
-      $('#template-name').textContent = app.model.root.name;
+      const state = JSON.parse(await decompress(m[1]));
+      // A shared design built on demo keys always opens in demo mode, behind the warning.
+      if (hasDemoKeys(state)) await app.setDemo(true, { open: false });
+      app.model.load(state, { resetHistory: true });
+      app.persist();
       return true;
     } catch (e) {
       toast('That share link could not be read', 'warn');
     }
   }
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    try {
-      app.model.load(JSON.parse(saved), { resetHistory: true });
-      $('#template-name').textContent = app.model.root.name;
-      return true;
-    } catch { /* fall through to default */ }
-  }
-  return false;
+  const saved = readState(app.storageKey());
+  if (!saved) return false;
+  app.model.load(saved, { resetHistory: true });
+  return true;
 }
 
 async function main() {
@@ -583,17 +623,11 @@ async function main() {
   buildTemplateMenu(app);
   bindDialogs(app);
   bindToolbar(app);
-  app.setDemo(truthy(new URLSearchParams(location.search).get(DEMO_PARAM)), { render: false });
+  await app.setDemo(truthy(new URLSearchParams(location.search).get(DEMO_PARAM)), { open: false });
   $('#version').textContent = version();
 
-  if (await restore(app)) {
-    app.refresh();
-    requestAnimationFrame(() => app.canvas.fit({ animate: false }));
-    app.panels.setTab('paths');
-  } else {
-    // Professional default: an empty wallet. Demo mode opens on a worked example.
-    await app.loadTemplate(app.demo ? TEMPLATES[0] : TEMPLATES.find((t) => t.id === 'blank'));
-  }
+  if (await restore(app)) app.showWorkspace();
+  else await app.openWorkspace();
   $('#boot').classList.add('is-done');
   setTimeout(() => $('#boot').remove(), 600);
 }

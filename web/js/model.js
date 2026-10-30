@@ -76,12 +76,15 @@ export class Model extends EventTarget {
   load(state, { resetHistory = false } = {}) {
     for (const n of Object.values(state.nodes)) if (hasInputs(n)) n.inputs = n.inputs.filter((c) => state.nodes[c]);
     this.state = state;
-    if (resetHistory) {
-      this.history = [];
-      this.future = [];
-      this.lastSnapshot = JSON.stringify(state);
-    } else this.commit();
+    if (resetHistory) this.clearHistory();
+    else this.commit();
     this.emit('load');
+  }
+
+  clearHistory() {
+    this.history = [];
+    this.future = [];
+    this.lastSnapshot = JSON.stringify(this.state);
   }
 
   // -- mutation ------------------------------------------------------------
