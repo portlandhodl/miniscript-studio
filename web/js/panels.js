@@ -2,7 +2,7 @@
 import { TYPES, hasInputs } from './model.js';
 import { icon, ROLES } from './icons.js';
 import { lifehash, lifehashImg } from './lifehash.js';
-import { blockSummary } from './blocks.js';
+import { blockSummary, decaySchedule, ladderHTML } from './blocks.js';
 import { custodyPhases, evaluate } from './policy.js';
 import { parseKey } from './wasm.js';
 import {
@@ -251,7 +251,11 @@ export class Panels {
       <div class="section-title">Inputs</div>
       ${rows || '<p class="caption">Nothing connected yet. Drag a block’s right handle onto this block.</p>'}
       ${n.type === 'or' ? `<div class="callout callout--info">${icon('sparkle')}<span>Likelihood tells the compiler which branch you expect to use. It makes that branch cheaper; with Taproot, the most likely single key becomes the private key-path spend.</span></div>` : ''}
-      ${n.type === 'thresh' ? `<div class="callout callout--info">${icon('thresh')}<span>When every input is a key, this compiles to <code>multi</code> (P2WSH) or <code>multi_a</code> (Taproot). Mix in timelocks for decaying multisig.</span></div>` : ''}`;
+      ${n.type === 'thresh' && decaySchedule(n, m) ? `
+        <div class="section-title">Decay schedule</div>
+        ${ladderHTML(decaySchedule(n, m))}
+        <div class="callout callout--info">${icon('clock')}<span>Each timelock input counts as <b>one signature that signs itself</b> once its time has passed. With ${n.k} of ${n.inputs.length} required, every expired timelock means one fewer real signer is needed.</span></div>`
+      : n.type === 'thresh' ? `<div class="callout callout--info">${icon('thresh')}<span>When every input is a key, this compiles to <code>multi</code> (P2WSH) or <code>multi_a</code> (Taproot). Add timelock inputs for a <b>decaying multisig</b>: each one that expires replaces one signature.</span></div>` : ''}`;
   }
 
   walletInspector(n) {
@@ -403,13 +407,25 @@ export class Panels {
     const devices = built.devices;
     const phases = custodyPhases(built.paths, devices);
     const n = devices.length;
-    const phaseHTML = phases.map((ph) => {
+    // Which timelock blocks expire at each moment: the cause of each new phase.
+    const reach = app.model.reachable();
+    const timelocks = Object.values(app.model.nodes).filter((x) => reach.has(x.id) && (x.type === 'older' || (x.type === 'after' && x.value)));
+    const waitOf = (x) => (x.type === 'older' ? olderSeconds(Number(x.value)) : Math.max(0, afterSecondsFromNow(Number(x.value))));
+    const phaseHTML = phases.map((ph, pi) => {
       const when = ph.t === 0 ? 'From day one' : `After ${fmtDuration(ph.t)}`;
+      const causes = ph.t > 0 ? timelocks.filter((x) => Math.abs(waitOf(x) - ph.t) < 1) : [];
+      const prev = phases[pi - 1];
+      const delta = prev?.minSigners != null && ph.minSigners != null ? prev.minSigners - ph.minSigners : 0;
+      const cause = causes.length
+        ? `<div class="phase__cause">${causes.map((x) => `<span class="chip chip--time">${icon(x.type === 'older' ? 'clock' : 'calendar')} ${esc(blockSummary(x, app))} passes</span>`).join('')}
+            <span class="phase__delta">${delta > 0 ? `${delta === 1 ? 'one' : delta} fewer signer${delta === 1 ? '' : 's'} needed` : prev && !prev.active.length ? 'first path opens' : 'a new fallback path opens'}</span></div>`
+        : '';
       if (!ph.active.length) {
         return `<div class="phase"><div class="phase__when">${when}</div><div class="phase__locked">${icon('lock')} No path is open yet</div></div>`;
       }
       return `<div class="phase">
         <div class="phase__when">${when}</div>
+        ${cause}
         <div class="phase__stats">
           <div class="stat"><div class="stat__v">${ph.minSigners}<small> of ${n}</small></div><div class="stat__l">signers needed</div></div>
           <div class="stat"><div class="stat__v ${ph.tolerance > 0 ? 'good' : 'bad'}">${ph.tolerance ?? '–'}</div><div class="stat__l">keys you can lose</div></div>
@@ -576,7 +592,7 @@ export class Panels {
       : `<b>Right after funding</b> <span class="muted">· ${fmtDate(now)}</span>`;
 
     const sat = evaluate(app.model, { available, known, elapsed, now });
-    app.canvas.setOverlay({ mode: 'sim', sat });
+    app.canvas.setOverlay({ mode: 'sim', sat, elapsed });
 
     const haveAll = (p) => [...p.devices].every((d) => available.has(d)) && [...p.hashes].every((h) => known.has(h));
     const open = built.paths.map((p, i) => ({ p, i })).filter(({ p }) => !p.conflict && haveAll(p) && p.wait <= elapsed);

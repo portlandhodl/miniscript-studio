@@ -16,7 +16,7 @@ export const TEMPLATES = [
   {
     id: 'decaying',
     name: 'Decaying multisig',
-    blurb: '3 of 3 at first. After 6 months any 2 can spend, and after a year any 1. Lost keys get more forgivable over time.',
+    blurb: 'Threshold 3 of 5: three keys plus two timelocks. Each timelock that expires counts as one signature, so it goes 3 of 3, then 2 of 3 after 6 months, then 1 of 3 after a year.',
     context: 'wsh',
     policy: () => `thresh(3,pk(Alice),pk(Bob),pk(Carol),older(${YEAR / 2}),older(${YEAR}))`,
     keys: { Alice: ['Alice', 'hardware'], Bob: ['Bob', 'hardware'], Carol: ['Carol', 'cold'] },

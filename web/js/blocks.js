@@ -82,13 +82,56 @@ function timeBody(n) {
     <div class="mono muted">after(${v}) · ${left > 0 ? `in ${fmtDuration(left)}` : 'already reached'}</div>`;
 }
 
-function logicBody(n) {
+const timelockWait = (c) =>
+  c.type === 'older' ? olderSeconds(Number(c.value)) : Math.max(0, afterSecondsFromNow(Number(c.value)));
+
+/**
+ * For a threshold that mixes timelocks with other inputs: how many of the other
+ * inputs (usually signers) are required at each moment. Every timelock that has
+ * passed counts as one satisfied input, a signature that signs itself.
+ */
+export function decaySchedule(n, model) {
+  if (n.type !== 'thresh') return null;
+  const kids = n.inputs.map((id) => model.node(id)).filter(Boolean);
+  const timed = kids.filter((c) => c.type === 'older' || (c.type === 'after' && Number(c.value) > 0));
+  if (!timed.length) return null;
+  const others = kids.length - timed.length;
+  const unit = kids.filter((c) => !timed.includes(c)).every((c) => c.type === 'key') ? 'signer' : 'condition';
+  const times = [...new Set([0, ...timed.map(timelockWait)])].sort((a, b) => a - b);
+  return {
+    unit,
+    others,
+    rows: times.map((t) => {
+      const passed = timed.filter((c) => timelockWait(c) <= t).length;
+      const need = Math.max(0, n.k - passed);
+      return { t, need, of: others, by: timed.filter((c) => timelockWait(c) === t && t > 0) };
+    }),
+  };
+}
+
+export function ladderHTML(sched, { compact = false } = {}) {
+  const rows = sched.rows.map((r) => {
+    const dots = Array.from({ length: sched.others }, (_, i) => `<i class="${i < r.need ? 'on' : ''}"></i>`).join('');
+    const val = r.need > sched.others ? 'locked' : r.need === 0 ? 'no signature!' : `${r.need} of ${sched.others}`;
+    const cls = r.need === 0 ? 'is-bad' : r.need > sched.others ? 'is-locked' : '';
+    return `<div class="ladder__row ${cls}" data-t="${r.t}">
+      <span class="ladder__when">${r.t === 0 ? 'Now' : `After ${fmtDuration(r.t, { short: true })}`}</span>
+      <span class="ladder__dots">${dots}</span>
+      <span class="ladder__val">${val}</span>
+    </div>`;
+  }).join('');
+  return `<div class="ladder ${compact ? 'ladder--compact' : ''}">
+    <div class="ladder__title">${sched.unit === 'signer' ? 'Signers' : 'Conditions'} needed over time</div>${rows}</div>`;
+}
+
+function logicBody(n, app) {
   if (n.type === 'thresh') {
+    const sched = decaySchedule(n, app.model);
     return `<div class="stepper no-drag">
       <button class="icon-btn" data-act="k-" title="Fewer required">${icon('minus')}</button>
       <div class="stepper__value"><b>${n.k}</b> of ${n.inputs.length}</div>
       <button class="icon-btn" data-act="k+" title="More required">${icon('plus')}</button>
-    </div>`;
+    </div>${sched ? ladderHTML(sched, { compact: true }) : ''}`;
   }
   return `<div class="muted small">${n.type === 'and' ? 'Every input must be satisfied' : 'Any single input is enough'}</div>`;
 }
@@ -141,7 +184,7 @@ export function nodeHTML(n, app) {
     case 'or':
     case 'thresh':
       sub = n.type === 'and' ? 'and' : n.type === 'or' ? 'or' : 'thresh';
-      body = logicBody(n);
+      body = logicBody(n, app);
       break;
     case 'wallet':
       title = esc(n.name || 'Wallet');
@@ -155,7 +198,10 @@ export function nodeHTML(n, app) {
     const total = n.weights ? n.weights.slice(0, n.inputs.length).reduce((a, b) => a + (b || 1), 0) : 0;
     const rows = n.inputs.map((cid, i) => {
       const c = app.model.node(cid);
-      const meta = n.type === 'or' ? `<span class="slot__meta" title="Relative likelihood">${Math.round(((n.weights[i] || 1) / total) * 100)}%</span>` : '';
+      const decays = n.type === 'thresh' && (c?.type === 'older' || c?.type === 'after');
+      const meta = n.type === 'or'
+        ? `<span class="slot__meta" title="Relative likelihood">${Math.round(((n.weights[i] || 1) / total) * 100)}%</span>`
+        : decays ? `<span class="slot__meta slot__meta--decay" title="Once this time passes it counts as one satisfied input">−1 signer</span>` : '';
       return `<div class="slot is-filled" data-slot="${i}">
         <span class="port port--in port--${TYPES[c?.type]?.family}"></span>
         <span class="slot__label">${esc(c ? blockSummary(c, app) : '?')}</span>${meta}

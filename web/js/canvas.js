@@ -127,6 +127,13 @@ export class Canvas {
       if (ov.mode === 'path') el.classList.add(ov.nodes.has(id) ? 'is-lit' : 'is-dim');
       else el.classList.add(ov.sat.get(id) ? 'is-sat' : 'is-unsat');
     }
+    // Decay ladders: mark the rung that applies now (or at the simulated time).
+    const elapsed = ov?.mode === 'sim' ? ov.elapsed : 0;
+    for (const ladder of this.nodesEl.querySelectorAll('.ladder')) {
+      const rows = [...ladder.querySelectorAll('.ladder__row')];
+      const cur = rows.filter((r) => Number(r.dataset.t) <= elapsed).pop();
+      rows.forEach((r) => r.classList.toggle('is-current', r === cur));
+    }
   }
 
   select(id) {
