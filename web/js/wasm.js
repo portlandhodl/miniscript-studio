@@ -15,3 +15,5 @@ export const parseKey = (k) => call(ms.parse_key, k);
 export const generateKey = (entropyHex, network) => call(ms.generate_key, entropyHex, network);
 export const lifehashRGBA = (input, moduleSize = 1) => ms.lifehash_rgba(input, moduleSize);
 export const version = () => ms.version();
+/** Strictly validates a Key Ownership Manifest; returns a WASM handle or throws a message. */
+export const komLoad = (text) => ms.komLoad(text);

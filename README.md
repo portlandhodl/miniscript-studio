@@ -16,6 +16,11 @@
 - **Export.** Descriptors (combined, receive, change), a BIP-388 wallet policy for hardware signers, addresses, Bitcoin Core `importdescriptors`, and a backup file.
 - **Import.** Paste a descriptor, a policy or a miniscript, and it gets lifted back into blocks.
 - **Share links.** The whole design is compressed into the URL fragment. No server.
+- **Key ownership.** Load a [Key Ownership Manifest](docs/key-ownership-spec.md) (`.kom.json`), tick the signers you control, and every key in a design or imported descriptor is marked *ours*, *known*, *unknown*, or a *conflict* (a key claiming a known signer's fingerprint and path that doesn't match). Paths show whether you can sign alone. Manifests are strictly validated in WASM and kept in memory only.
+
+## Key Ownership Manifests
+
+[`docs/key-ownership-spec.md`](docs/key-ownership-spec.md) defines a common format for an organisation's public keys: signers (master fingerprints) and their keys, identified by a version-independent key id. Inventories in any layout are converted into it by an organisation-specific converter, which is deliberately not part of this repository. Manifests contain public keys only. Malformed entries or any private key material reject the whole file, and the reason given never quotes the value. Which signers you control is chosen when you load the manifest, not stored in it.
 
 ## Develop
 
@@ -32,6 +37,8 @@ The frontend is plain ES modules in `web/js/`, with no bundler and no build step
 | Path | Purpose |
 |---|---|
 | `wasm/src/lib.rs` | WASM bridge: compile, plan, import/lift, key parsing, demo keys, LifeHash |
+| `wasm/src/kom.rs` | Key Ownership Manifest validation and key matching |
+| `web/js/ownership.js` | Manifest loading, "we control" selection, match results |
 | `web/js/model.js` | Block graph, connection rules, undo history |
 | `web/js/policy.js` | Blocks → policy, spending-path enumeration, custody analysis, simulation |
 | `web/js/canvas.js` | Rendering, pan/zoom, drag and wiring, tidy layout |

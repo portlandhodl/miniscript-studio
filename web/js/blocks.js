@@ -2,6 +2,7 @@
 import { TYPES, hasInputs } from './model.js';
 import { icon, ROLES } from './icons.js';
 import { lifehashImg } from './lifehash.js';
+import { OWNERSHIP_CHIPS, describeMatch } from './ownership.js';
 import {
   esc, fmtDuration, fmtInt, fmtDate, olderSeconds, olderIsTime, afterIsTime, afterSecondsFromNow,
   describeOlder,
@@ -55,6 +56,8 @@ export function blockSummary(n, app) {
 function keyBody(n, app) {
   const uses = app.model.parentsOf(n.id).length;
   const fp = /^\[([0-9a-f]{8})/.exec(n.key || '')?.[1];
+  const own = app.ownership.match(n.key);
+  const [ownCls, ownText] = own ? OWNERSHIP_CHIPS[own.kind] : [];
   return `
     <div class="key-card">
       ${lifehashImg(n.key, 'lifehash--lg')}
@@ -64,6 +67,7 @@ function keyBody(n, app) {
           ${n.seed ? '<span class="chip chip--muted">demo</span>'
             : n.origin === 'xpub' ? '<span class="chip chip--wallet">your xpub</span>'
             : n.key ? '<span class="chip chip--ok">custom</span>' : ''}
+          ${own ? `<span class="chip ${ownCls}" title="${esc(describeMatch(own))}">${ownText}</span>` : ''}
           ${uses > 1 ? `<span class="chip chip--key" title="Each extra use is derived on its own multipath branch">${uses} paths</span>` : ''}
         </div>
       </div>

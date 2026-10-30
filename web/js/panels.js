@@ -160,6 +160,7 @@ export class Panels {
       <label class="field"><span>Public key <em>xpub with origin, e.g. [fp/48h/0h/0h/2h]xpub…</em></span>
         <textarea data-f="key" rows="4" class="mono" spellcheck="false" placeholder="[d34db33f/48h/0h/0h/2h]xpub…/&lt;0;1&gt;/*">${esc(n.key)}</textarea></label>
       <div id="key-feedback">${this.keyFeedback(info, mismatch)}</div>
+      ${this.ownershipCallout(n.key)}
       <div class="btn-row">
         <button class="btn btn--primary" data-do="xpub">${icon('hardware')} Add your xpub</button>
       </div>
@@ -171,6 +172,23 @@ export class Panels {
       ${n.seed ? `<div class="callout callout--info">${icon('alert')}<span>Demo key from a public seed. <b>Never send real funds to it.</b> Paste your own xpub to design a real wallet.</span></div>` : ''}
       <div class="section-title">Used in ${uses} place${uses === 1 ? '' : 's'}</div>
       <p class="caption">A key block is one signing device. Wire it into several paths and each use gets its own derivation branch (<code>&lt;0;1&gt;</code>, <code>&lt;2;3&gt;</code>, …), the same approach Liana uses, so miniscript never sees a duplicate key.</p>`;
+  }
+
+  ownershipCallout(key) {
+    const r = this.app.ownership.match(key);
+    if (!r) return '';
+    const cls = { owned: 'callout--ok', known: 'callout--info', conflict: 'callout--bad', device: 'callout--warn', unknown: 'callout--info' }[r.kind];
+    const extra = [
+      r.path && r.kind !== 'conflict' ? `Path <code>${esc(r.path)}</code>` : '',
+      r.account != null ? `account ${r.account}` : '',
+      r.status ? esc(r.status) : '',
+    ].filter(Boolean).join(' · ');
+    const mismatch = {
+      'no-origin': 'This key has no origin: hardware signers may not recognise it.',
+      fingerprint: 'The origin fingerprint differs from the manifest: hardware signers may not recognise it.',
+      path: 'The origin path differs from the manifest: hardware signers may not recognise it.',
+    }[r.originMismatch];
+    return `<div class="callout ${cls}">${icon(r.kind === 'owned' ? 'shield' : 'alert')}<span><b>Ownership:</b> ${esc(describeMatch(r))}${extra ? `<br><small>${extra}</small>` : ''}${mismatch ? `<br>${mismatch}` : ''}</span></div>`;
   }
 
   keyFeedback(info, mismatch) {
@@ -437,6 +455,7 @@ export class Panels {
     const cards = built.paths.map((p, i) => {
       const plan = r?.paths?.[i];
       const isKeyPath = r?.context === 'tr' && r.key_path_spendable && p.uses.length === 1 && p.uses[0] === r.internal_key && !p.wait && !p.hashes.size;
+      const own = this.pathOwnership(p);
       const conds = [];
       if (p.olderBlocks) conds.push(`${icon('clock')} wait ${fmtDuration(olderSeconds(p.olderBlocks))}`);
       if (p.olderTime) conds.push(`${icon('clock')} wait ${fmtDuration(olderSeconds(p.olderTime))}`);
@@ -452,7 +471,8 @@ export class Panels {
         <div class="path-card__who">${[...p.devices].map((d) => esc(app.model.node(d).label)).join(' + ') || 'No signature'}</div>
         <div class="chips chips--wrap">${conds.map((c) => `<span class="chip chip--cond">${c}</span>`).join('')}
           ${!conds.length ? '<span class="chip chip--ok">available now</span>' : ''}
-          ${isKeyPath ? '<span class="chip chip--wallet" title="Looks like single-sig on chain">key path · private</span>' : ''}</div>
+          ${isKeyPath ? '<span class="chip chip--wallet" title="Looks like single-sig on chain">key path · private</span>' : ''}
+          ${own}</div>
       </div>`;
     }).join('');
 
@@ -633,6 +653,7 @@ export class Panels {
         <div class="muted">${r.context === 'tr' ? 'Taproot' : 'P2WSH'} · ${app.model.state.network}</div>
         <div class="caption">This LifeHash is the visual identity of the descriptor. Every cosigner should see the same image.</div></div>
       </div>
+      ${this.ownershipSummary()}
       ${demo ? `<div class="callout callout--warn">${icon('alert')}<span>Uses <b>demo keys</b> derived from public seeds. Don’t send funds. Replace them with your own xpubs.</span></div>` : ''}
       ${this.copyBlock('Descriptor (receive + change)', r.descriptor)}
       ${r.single_descriptors?.map((d, i) => this.copyBlock(i === 0 ? 'Receive descriptor' : 'Change descriptor', d, true)).join('') ?? ''}
@@ -651,6 +672,32 @@ export class Panels {
       const req = r.single_descriptors.map((desc, i) => ({ desc, active: true, internal: i === 1, timestamp: 'now', range: [0, 999] }));
       copyText(`importdescriptors '${JSON.stringify(req)}'`);
     });
+  }
+
+  /** "We can sign alone" when every signer on the path is ours, per the loaded manifest. */
+  pathOwnership(p) {
+    const own = this.app.ownership;
+    if (!own.loaded || !p.devices.size) return '';
+    const kinds = [...p.devices].map((d) => own.match(this.app.model.node(d).key)?.kind ?? 'unknown');
+    if (kinds.includes('conflict')) return '<span class="chip chip--bad">key conflict</span>';
+    const theirs = kinds.filter((k) => k !== 'owned').length;
+    return theirs
+      ? `<span class="chip chip--muted" title="Signers on this path that you don’t control">needs ${theirs} other signer${theirs === 1 ? '' : 's'}</span>`
+      : '<span class="chip chip--ok">we can sign alone</span>';
+  }
+
+  /** Ownership summary for the Wallet tab. */
+  ownershipSummary() {
+    const { app } = this;
+    if (!app.ownership.loaded) return '';
+    const reach = app.model.reachable();
+    const counts = { owned: 0, known: 0, device: 0, unknown: 0, conflict: 0 };
+    const keys = app.model.keyNodes().filter((k) => reach.has(k.id));
+    for (const k of keys) counts[app.ownership.match(k.key)?.kind ?? 'unknown']++;
+    return `<div class="callout ${counts.conflict ? 'callout--bad' : 'callout--info'}">${icon('shield')}<span>
+      <b>${counts.owned} of ${keys.length}</b> key${keys.length === 1 ? '' : 's'} ours · ${counts.known} known · ${counts.device + counts.unknown} unknown
+      ${counts.conflict ? `· <b>${counts.conflict} conflict${counts.conflict === 1 ? '' : 's'}</b>: a key claims a known signer but does not match` : ''}
+      <br><small>From ${esc(app.ownership.name)}</small></span></div>`;
   }
 
   copyBlock(label, text, compact = false) {

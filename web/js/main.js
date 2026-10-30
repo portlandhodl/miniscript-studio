@@ -9,6 +9,7 @@ import { parsePolicy, buildBlocks } from './parse.js';
 import { TEMPLATES } from './templates.js';
 import { KeyDialog } from './keydialog.js';
 import { lifehashImg } from './lifehash.js';
+import { Ownership, OWNERSHIP_CHIPS, SPEC_URL, describeMatch } from './ownership.js';
 import { icon, ROLES } from './icons.js';
 import { $, $$, h, esc, toast, copyText, seedHex, randomHex, hexToBytes, sha256Hex, compress, decompress, privateMaterial } from './util.js';
 
@@ -35,6 +36,7 @@ class App {
     this.canvas = new Canvas($('#canvas'), this);
     this.panels = new Panels(this);
     this.keys = new KeyDialog(this);
+    this.ownership = new Ownership();
     // Demo mode: public-seed demo keys and related shortcuts. Off by default.
     this.demo = false;
     this.canvas.app.onSelect = (id) => {
@@ -382,6 +384,75 @@ class App {
 // Chrome: palette, menus, dialogs, keyboard
 // ---------------------------------------------------------------------------
 
+function bindOwnership(app) {
+  const dlg = $('#own-dialog');
+  const own = app.ownership;
+  $('#own-spec').href = $('#help-spec').href = SPEC_URL;
+  const render = () => {
+    $('#btn-own').classList.toggle('is-loaded', own.loaded);
+    $('#own-remove').hidden = !own.loaded;
+    if (!own.loaded) {
+      $('#own-body').innerHTML = `<label class="dropzone" id="own-drop">${icon('download')}
+        <span><b>Choose a .kom.json file</b> or drop it here</span>
+        <span class="small muted">Checked strictly: any malformed entry or private key material rejects the whole file.</span>
+        <input type="file" id="own-file" accept=".json,application/json" hidden></label>`;
+      const drop = $('#own-drop');
+      $('#own-file').addEventListener('change', (e) => e.target.files[0] && load(e.target.files[0]));
+      drop.addEventListener('dragover', (e) => (e.preventDefault(), drop.classList.add('is-over')));
+      drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
+      drop.addEventListener('drop', (e) => {
+        e.preventDefault();
+        drop.classList.remove('is-over');
+        if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]);
+      });
+      return;
+    }
+    const s = own.summary;
+    const mismatch = (s.network === 'bitcoin') !== (app.model.state.network === 'bitcoin');
+    $('#own-body').innerHTML = `
+      <div class="own-meta"><b>${esc(own.name)}</b><span>${s.keys.toLocaleString()} keys</span><span>${s.signers.length} signers</span>
+        <span>${s.network === 'bitcoin' ? 'Mainnet' : 'Test networks'}</span><span><b id="own-count">${own.controlled.size}</b> marked as ours</span></div>
+      ${mismatch ? `<div class="callout callout--warn">${icon('alert')}<span>This manifest is for ${s.network === 'bitcoin' ? 'mainnet' : 'test networks'}; the wallet is set to ${esc(app.model.state.network)}.</span></div>` : ''}
+      <div class="section-title">Which signers do you control?</div>
+      <div class="own-signers">${s.signers.map((g) => `
+        <label class="own-signer">
+          <input type="checkbox" data-signer="${esc(g.id)}" ${own.controlled.has(g.id) ? 'checked' : ''}>
+          <span class="own-signer__name">${esc(g.label)}</span>
+          <span class="own-signer__count">${g.keys.toLocaleString()} key${g.keys === 1 ? '' : 's'}</span>
+          <span class="own-signer__sub mono">${g.fingerprint ? `fp ${g.fingerprint}` : 'no fingerprint'}${g.group ? ` · ${esc(g.group)}` : ''}${g.role ? ` · ${esc(g.role)}` : ''}</span>
+        </label>`).join('')}</div>
+      <p class="caption">Your selection is remembered for this file on this device. The keys are not.</p>`;
+    $$('#own-body [data-signer]').forEach((c) => c.addEventListener('change', () => {
+      own.setControlled(c.dataset.signer, c.checked);
+      $('#own-count').textContent = own.controlled.size;
+      app.refresh();
+    }));
+  };
+  const load = async (file) => {
+    $('#own-error').textContent = '';
+    $('#own-body').innerHTML = `<div class="kc__empty">Validating ${esc(file.name)}…</div>`;
+    await new Promise((r) => setTimeout(r, 30));
+    try {
+      await own.load(file);
+      toast(`Loaded ${own.summary.keys.toLocaleString()} keys from ${own.summary.signers.length} signers`);
+    } catch (e) {
+      $('#own-error').textContent = `Rejected: ${e.message}`;
+    }
+    render();
+    app.refresh();
+  };
+  $('#btn-own').addEventListener('click', () => {
+    $('#own-error').textContent = '';
+    render();
+    dlg.showModal();
+  });
+  $('#own-remove').addEventListener('click', () => {
+    own.clear();
+    render();
+    app.refresh();
+  });
+}
+
 function bindDemo(app) {
   $('#btn-demo').addEventListener('click', () => app.setDemo(!app.demo));
   $('#demo-exit').addEventListener('click', () => app.setDemo(false));
@@ -538,10 +609,16 @@ function bindDialogs(app) {
     $('#import-keys').innerHTML = [...prep.signers].map(([id, k]) => {
       const info = k.key ? parseKey(k.key) : null;
       const meta = info?.ok ? `fp ${info.fingerprint}` : k.key ? 'unrecognised key' : 'no key yet';
+      // A loaded ownership manifest names the signers it recognises.
+      const own = app.ownership.match(info?.ok ? info.key : k.key);
+      if (own?.signer && (own.kind === 'owned' || own.kind === 'known')) {
+        k = { ...k, label: own.signer.label.slice(0, 24), role: own.signer.role ?? k.role };
+      }
+      const [ownCls, ownText] = own ? OWNERSHIP_CHIPS[own.kind] : [];
       return `<div class="import-key" data-signer="${esc(id)}">
         ${lifehashImg(k.key, 'lifehash--lg')}
         <div class="import-key__body">
-          <div class="import-key__meta mono">${esc(meta)}${k.seed ? ' · <span class="chip chip--muted">demo</span>' : ''}</div>
+          <div class="import-key__meta mono">${esc(meta)}${k.seed ? ' · <span class="chip chip--muted">demo</span>' : ''}${own ? ` <span class="chip ${ownCls}" title="${esc(describeMatch(own))}">${ownText}</span>` : ''}</div>
           <div class="import-key__fields">
             <input data-f="label" value="${esc(k.label)}" maxlength="24" spellcheck="false" aria-label="Key name">
             <select data-f="role" aria-label="Role">${roles(k.role)}</select>
@@ -640,6 +717,7 @@ async function main() {
   const app = new App();
   window.studio = app;
   bindDemo(app);
+  bindOwnership(app);
   buildTemplateMenu(app);
   bindDialogs(app);
   bindToolbar(app);

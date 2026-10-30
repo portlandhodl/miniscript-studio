@@ -23,6 +23,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use wasm_bindgen::prelude::*;
 
+mod kom;
+
 /// BIP-341 "H" point: provably unspendable x-only internal key (hash of G, no known discrete log).
 const NUMS: &str = "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0";
 const NUMS_ALIAS: &str = "UNSPENDABLE";

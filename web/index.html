@@ -59,6 +59,10 @@
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
         Import
       </button>
+      <button class="btn btn--ghost" id="btn-own" title="Load a key ownership manifest to see which keys are yours">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v6c0 4.5 3.2 7.8 7.5 9 4.3-1.2 7.5-4.5 7.5-9V6z"/><path d="m9 12 2 2 4-4"/></svg>
+        Ownership
+      </button>
       <button class="btn btn--ghost" id="btn-clear" title="Start over with an empty wallet (undo restores it)">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>
         Clear
@@ -192,6 +196,17 @@
     </div>
   </dialog>
 
+  <dialog id="own-dialog" class="dialog dialog--wide">
+    <div class="dialog__head"><h3>Key ownership</h3><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <p class="caption">Load a <b>Key Ownership Manifest</b> (<code>.kom.json</code>): a list of public keys grouped by signer. Tick the signers you control, and every key in the design is marked <b>ours</b>, <b>known</b> or <b>unknown</b>. A key that claims a known signer’s fingerprint and path but doesn’t match it is flagged as a <b>conflict</b>. Public keys only. The file stays in this tab’s memory: it is never saved, uploaded or put in share links. <a id="own-spec" target="_blank" rel="noopener">Format spec</a></p>
+    <div id="own-body"></div>
+    <div class="dialog__error" id="own-error"></div>
+    <div class="dialog__foot">
+      <button class="btn btn--ghost" id="own-remove" type="button" hidden>Remove manifest</button>
+      <button class="btn btn--primary" data-close type="button">Done</button>
+    </div>
+  </dialog>
+
   <dialog id="help-dialog" class="dialog dialog--wide">
     <div class="dialog__head"><h3>About Miniscript Studio</h3><button class="icon-btn" data-close aria-label="Close">✕</button></div>
     <div class="about">
@@ -211,6 +226,14 @@
           <li>Runs fully client-side; nothing leaves your browser.</li>
         </ul></div>
       </div>
+      <h4>Key ownership</h4>
+      <p><b>Ownership</b> loads a <b>Key Ownership Manifest</b> (<code>.kom.json</code>): your organisation’s public keys, grouped by signer. Tick the signers you control and every key in the design is marked <b>ours</b>, <b>known</b> (a signer you know but don’t control), <b>known device</b> (right fingerprint, account not listed) or <b>unknown</b>. A <b>conflict</b> means a key claims a known signer’s fingerprint and path but its key material is different: treat it as a possible key substitution. <b>Paths</b> then shows which spending paths you can sign alone.</p>
+      <ul>
+        <li>Inventories in any layout are converted to the manifest format first; the format is documented in the <a id="help-spec" target="_blank" rel="noopener">Key Ownership Manifest spec</a>.</li>
+        <li>Validation is strict: one malformed entry, unknown field or any private key material rejects the whole file, and the message never quotes the value.</li>
+        <li>A key-id-only manifest (no xpubs) loads faster and reveals no addresses.</li>
+        <li>The manifest stays in this tab’s memory. It is never saved, uploaded or put in share links. Only which signers you ticked is remembered.</li>
+      </ul>
       <p class="callout callout--warn">This is a design and learning tool. Demo keys come from public seeds. Verify any real wallet with your signing devices before funding it.</p>
     </div>
   </dialog>
