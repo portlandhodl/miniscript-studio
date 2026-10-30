@@ -1,0 +1,20 @@
+[package]
+name = "miniscript-playground-wasm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+miniscript = { version = "13", features = ["compiler"] }
+bc-lifehash = "0.1"
+wasm-bindgen = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
