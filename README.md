@@ -44,4 +44,4 @@ Push to `main` with **Settings → Pages → Source: GitHub Actions** enabled. `
 
 ## ⚠️ Safety
 
-This is a design and learning tool. Demo keys are derived from public seeds, so **never send funds to them**. Before funding a real wallet, verify the descriptor and addresses on your signing devices.
+The studio starts with no demo content: you add real xpubs. Click **Demo mode** in the top bar (or open the page with `?demo=true`, which makes a shareable link) to get example templates and one-click demo keys. A banner stays visible while demo mode is on. Demo keys are derived from public seeds, so **never send funds to them**. Before funding a real wallet, verify the descriptor and addresses on your signing devices.

@@ -12,7 +12,7 @@ export const PALETTE = [
     group: 'Signers',
     items: [
       { type: 'key', title: 'Your own key', desc: 'Paste the xpub from your hardware wallet', icon: 'hardware', data: { role: 'hardware', label: 'My key' }, askXpub: true },
-      { type: 'key', title: 'Key', desc: 'A signing device: paste an xpub, or use a demo key', icon: 'key', data: { role: 'hardware' } },
+      { type: 'key', title: 'Key', desc: 'A signing device: add its xpub', demoDesc: 'A signing device: paste an xpub, or use a demo key', icon: 'key', data: { role: 'hardware' } },
       { type: 'key', title: 'Vendor key', desc: 'A collaborative custody co-signer', icon: 'vendor', data: { role: 'vendor', label: 'Vendor' } },
       { type: 'key', title: 'Heir key', desc: 'Someone who inherits after a delay', icon: 'heir', data: { role: 'heir', label: 'Heir' } },
     ],

@@ -1,5 +1,5 @@
 // Miniscript Studio: application bootstrap and orchestration.
-import { loadWasm, compile, generateKey, importDescriptor, liftMiniscript, version } from './wasm.js';
+import { loadWasm, compile, generateKey, importDescriptor, liftMiniscript, parseKey, version } from './wasm.js';
 import { Model, TYPES, hasInputs } from './model.js';
 import { Canvas } from './canvas.js';
 import { Panels } from './panels.js';
@@ -8,10 +8,13 @@ import { buildPolicy } from './policy.js';
 import { parsePolicy, buildBlocks } from './parse.js';
 import { TEMPLATES } from './templates.js';
 import { KeyDialog } from './keydialog.js';
-import { icon } from './icons.js';
+import { lifehashImg } from './lifehash.js';
+import { icon, ROLES } from './icons.js';
 import { $, $$, h, esc, toast, copyText, seedHex, randomHex, hexToBytes, sha256Hex, compress, decompress, privateMaterial } from './util.js';
 
 const STORAGE_KEY = 'miniscript-studio:v1';
+const DEMO_PARAM = 'demo';
+const truthy = (v) => /^(1|true|yes|on)$/i.test(v ?? '');
 
 class App {
   constructor() {
@@ -22,6 +25,8 @@ class App {
     this.canvas = new Canvas($('#canvas'), this);
     this.panels = new Panels(this);
     this.keys = new KeyDialog(this);
+    // Demo mode: public-seed demo keys and related shortcuts. Off by default.
+    this.demo = false;
     this.canvas.app.onSelect = (id) => {
       if (id) this.panels.setTab('block');
       else if (this.panels.tab === 'block') this.panels.renderSide();
@@ -44,6 +49,8 @@ class App {
   // -- core loop -----------------------------------------------------------
   refresh(kind = 'full') {
     const m = this.model;
+    // A design holding demo keys (share link, undo, saved state) always shows the demo warning.
+    if (!this.demo && this.hasDemoKeys()) this.setDemo(true, { render: false });
     this.built = buildPolicy(m);
     this.nodeErrors = new Map();
     for (const e of this.built.errors) if (!this.nodeErrors.has(e.id)) this.nodeErrors.set(e.id, e.msg);
@@ -82,6 +89,34 @@ class App {
     this.updateChrome();
   }
 
+  // -- demo mode -----------------------------------------------------------
+  hasDemoKeys() {
+    return this.model.keyNodes().some((k) => k.seed);
+  }
+
+  /** Turns demo mode on or off; leaving it strips demo keys from the design (undoable). */
+  setDemo(on, { render = true } = {}) {
+    this.demo = !!on;
+    document.body.classList.toggle('is-demo', this.demo);
+    $('#demo-banner').hidden = !this.demo;
+    const btn = $('#btn-demo');
+    btn.classList.toggle('is-active', this.demo);
+    btn.setAttribute('aria-pressed', String(this.demo));
+    const url = new URL(location.href);
+    if (this.demo) url.searchParams.set(DEMO_PARAM, 'true');
+    else url.searchParams.delete(DEMO_PARAM);
+    history.replaceState(null, '', url);
+    buildPalette(this);
+    if (!this.demo && this.hasDemoKeys()) {
+      const demoKeys = this.model.keyNodes().filter((k) => k.seed);
+      for (const k of demoKeys) this.model.update(k.id, { key: '', seed: null, origin: null });
+      this.model.commit();
+      toast(`Removed ${demoKeys.length} demo key${demoKeys.length === 1 ? '' : 's'}. Undo restores them (and demo mode).`);
+    } else if (render) {
+      this.panels.render();
+    }
+  }
+
   // -- keys ----------------------------------------------------------------
   assignDemoKey(node, seed) {
     const r = generateKey(seed, this.model.state.network);
@@ -115,7 +150,7 @@ class App {
     if (item.type === 'key') data.label = this.nextKeyLabel(data.label || 'Key');
     if (item.type === 'after') data.value = 0;
     const n = m.addNode(item.type, world.x, world.y, data);
-    if (item.type === 'key' && !item.askXpub) this.assignDemoKey(n, randomHex(32));
+    if (item.type === 'key' && !item.askXpub && this.demo) this.assignDemoKey(n, randomHex(32));
     if (target) {
       const why = m.connect(n.id, target.parent, target.slot);
       if (why) toast(why, 'warn');
@@ -160,9 +195,13 @@ class App {
       copy.inputs = [];
       if (copy.weights) copy.weights = [];
     }
-    if (copy.type === 'key') copy.label = this.nextKeyLabel(copy.label.replace(/\s+[A-Z]$/, ''));
+    if (copy.type === 'key') {
+      // A duplicate is a different device: it never inherits the original's key.
+      copy.label = this.nextKeyLabel(copy.label.replace(/\s+[A-Z]$/, ''));
+      Object.assign(copy, { key: '', seed: null, origin: null });
+    }
     const d = this.model.addNode(n.type, n.x + 30, n.y + 30, copy);
-    if (d.type === 'key') this.assignDemoKey(d, randomHex(32));
+    if (d.type === 'key' && this.demo) this.assignDemoKey(d, randomHex(32));
     this.model.commit();
     this.canvas.select(d.id);
   }
@@ -180,6 +219,7 @@ class App {
       const ast = parsePolicy(src);
       ({ pendingSecrets } = buildBlocks(m, ast, (ref) => {
         const [label, role] = t.keys[ref.ref] ?? [ref.ref, 'hardware'];
+        if (!this.demo) return { label, role, seed: null, key: '' };
         const seed = seedHex(`miniscript-studio/${t.id}/${ref.ref}`);
         return { label, role, seed, key: generateKey(seed, network).key };
       }));
@@ -192,6 +232,7 @@ class App {
     this.panels.sim = { available: null, known: new Set(), elapsed: 0 };
     this.afterRebuild();
     $('#template-name').textContent = t.name;
+    if (!this.demo && m.keyNodes().length) toast('Template loaded: add an xpub to each key block');
   }
 
   afterRebuild() {
@@ -203,7 +244,11 @@ class App {
     this.panels.setTab('paths');
   }
 
-  importText(text) {
+  /**
+   * Parses import text without touching the model. Returns everything needed to build
+   * the blocks, plus the distinct signers so the user can name them first.
+   */
+  prepareImport(text) {
     const m = this.model;
     const s = text.trim();
     const network = m.state.network;
@@ -212,9 +257,11 @@ class App {
     let uses = {};
     let context = m.state.context;
     const existing = new Map(m.keyNodes().map((k) => [k.label, k]));
-    const demo = (ref) => {
+    const unnamed = (ref) => {
+      const label = ref.replace(/_/g, ' ');
+      if (!this.demo) return { label, role: 'hardware', seed: null, key: '' };
       const seed = seedHex(`miniscript-studio/import/${ref}`);
-      return { label: ref.replace(/_/g, ' '), role: 'hardware', seed, key: generateKey(seed, network).key };
+      return { label, role: 'hardware', seed, key: generateKey(seed, network).key };
     };
     if (/^(wsh|tr|sh|wpkh|pkh)\(/.test(s)) {
       const r = importDescriptor(s);
@@ -222,7 +269,10 @@ class App {
       context = r.context;
       ast = parsePolicy(r.policy);
       uses = r.uses;
-      resolve = (ref) => ({ label: ref.ref, role: 'hardware', key: r.keys[uses[ref.ref] ?? ref.ref], seed: null });
+      resolve = (ref) => {
+        const block = uses[ref.ref] ?? ref.ref;
+        return { label: block.replace(/^Key(\d+)$/, 'Key $1'), role: 'hardware', key: r.keys[block], seed: null };
+      };
     } else {
       try {
         ast = parsePolicy(s);
@@ -231,27 +281,48 @@ class App {
         if (!lifted.ok) throw new Error(`Not a policy (${policyErr.message}) or miniscript (${lifted.error})`);
         ast = parsePolicy(lifted.policy);
       }
+      let literals = 0;
       resolve = (ref) => {
-        if (ref.literal) return { label: this.nextKeyLabel(), role: 'hardware', key: ref.literal, seed: null };
+        if (ref.literal) return { label: `Key ${++literals}`, role: 'hardware', key: ref.literal, seed: null };
         const e = existing.get(ref.ref) ?? existing.get(ref.ref.replace(/_/g, ' '));
-        return e ? { label: e.label, role: e.role, key: e.key, seed: e.seed } : demo(ref.ref);
+        return e ? { label: e.label, role: e.role, key: e.key, seed: e.seed } : unnamed(ref.ref);
       };
     }
-    const keep = { network, context, name: m.root.name };
+    // Distinct signers in first-use order, keyed the same way buildBlocks dedupes them.
+    const signers = new Map();
+    const walk = (n) => {
+      if (n.type === 'key') {
+        const id = n.literal ?? uses[n.ref] ?? n.ref;
+        if (!signers.has(id)) signers.set(id, resolve(n));
+      }
+      n.children?.forEach(walk);
+    };
+    walk(ast);
+    return { ast, uses, context, network, signers };
+  }
+
+  /** Rebuilds the canvas from a prepared import; `names` maps signer id to `{ label, role }`. */
+  applyImport(prep, names = {}) {
+    const m = this.model;
+    const keep = { network: prep.network, context: prep.context, name: m.root.name };
     m.state = Model.empty();
     Object.assign(m.state, { network: keep.network, context: keep.context });
     m.root.name = keep.name;
-    buildBlocks(m, ast, resolve, uses);
+    buildBlocks(m, prep.ast, (n) => {
+      const id = n.literal ?? prep.uses[n.ref] ?? n.ref;
+      return { ...prep.signers.get(id), ...names[id] };
+    }, prep.uses);
     this.afterRebuild();
     $('#template-name').textContent = 'Imported';
   }
 
   async share() {
     const data = await compress(JSON.stringify(this.model.state));
-    const url = `${location.origin}${location.pathname}#s=${data}`;
+    const url = new URL(location.href);
+    url.hash = `s=${data}`;
     history.replaceState(null, '', url);
-    copyText(url);
-    toast('Share link copied: the whole design lives in the URL');
+    copyText(url.href);
+    toast(`Share link copied: the whole design lives in the URL${this.demo ? ' (opens in demo mode)' : ''}`);
   }
 }
 
@@ -259,15 +330,22 @@ class App {
 // Chrome: palette, menus, dialogs, keyboard
 // ---------------------------------------------------------------------------
 
+function bindDemo(app) {
+  $('#btn-demo').addEventListener('click', () => app.setDemo(!app.demo));
+  $('#demo-exit').addEventListener('click', () => app.setDemo(false));
+}
+
 function buildPalette(app) {
   const root = $('#palette-body');
+  root.replaceChildren();
   for (const group of PALETTE) {
     root.append(h('div', { class: 'palette__group' }, group.group));
     for (const item of group.items) {
       const fam = TYPES[item.type].family;
-      const el = h('div', { class: `palette-item palette-item--${fam}`, tabindex: 0, role: 'button', title: item.desc });
+      const desc = (app.demo && item.demoDesc) || item.desc;
+      const el = h('div', { class: `palette-item palette-item--${fam}`, tabindex: 0, role: 'button', title: desc });
       el.innerHTML = `<span class="palette-item__icon">${icon(item.icon)}</span>
-        <span class="palette-item__text"><span class="palette-item__title">${item.title}</span><span class="palette-item__desc">${item.desc}</span></span>`;
+        <span class="palette-item__text"><span class="palette-item__title">${item.title}</span><span class="palette-item__desc">${desc}</span></span>`;
       bindPaletteDrag(app, el, item);
       root.append(el);
     }
@@ -356,13 +434,41 @@ function buildTemplateMenu(app) {
 
 function bindDialogs(app) {
   const imp = $('#import-dialog');
+  let prep = null;
+  const step = (keys) => {
+    $('#import-step-text').hidden = keys;
+    $('#import-step-keys').hidden = !keys;
+    $('#import-back').hidden = !keys;
+    $('#import-go').textContent = keys ? 'Import as blocks' : 'Continue';
+  };
   $('#btn-import').addEventListener('click', () => {
     $('#import-error').textContent = '';
+    prep = null;
+    step(false);
     imp.showModal();
     $('#import-text').focus();
   });
+  $('#import-back').addEventListener('click', () => {
+    $('#import-error').textContent = '';
+    prep = null;
+    step(false);
+  });
+  const finish = (names) => {
+    app.applyImport(prep, names);
+    imp.close();
+    toast('Imported as blocks');
+  };
   $('#import-go').addEventListener('click', (e) => {
     e.preventDefault();
+    $('#import-error').textContent = '';
+    if (prep) {
+      const names = {};
+      $$('#import-keys [data-signer]').forEach((row) => {
+        const label = row.querySelector('[data-f="label"]').value.trim();
+        names[row.dataset.signer] = { role: row.querySelector('[data-f="role"]').value, ...(label && { label }) };
+      });
+      return finish(names);
+    }
     const secret = privateMaterial($('#import-text').value);
     if (secret) {
       $('#import-text').value = '';
@@ -370,12 +476,29 @@ function bindDialogs(app) {
       return;
     }
     try {
-      app.importText($('#import-text').value);
-      imp.close();
-      toast('Imported as blocks');
+      prep = app.prepareImport($('#import-text').value);
     } catch (err) {
       $('#import-error').textContent = err.message;
+      return;
     }
+    if (!prep.signers.size) return finish();
+    const roles = (sel) => Object.entries(ROLES).map(([k, r]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${r.label}</option>`).join('');
+    $('#import-keys').innerHTML = [...prep.signers].map(([id, k]) => {
+      const info = k.key ? parseKey(k.key) : null;
+      const meta = info?.ok ? `fp ${info.fingerprint}` : k.key ? 'unrecognised key' : 'no key yet';
+      return `<div class="import-key" data-signer="${esc(id)}">
+        ${lifehashImg(k.key, 'lifehash--lg')}
+        <div class="import-key__body">
+          <div class="import-key__meta mono">${esc(meta)}${k.seed ? ' · <span class="chip chip--muted">demo</span>' : ''}</div>
+          <div class="import-key__fields">
+            <input data-f="label" value="${esc(k.label)}" maxlength="24" spellcheck="false" aria-label="Key name">
+            <select data-f="role" aria-label="Role">${roles(k.role)}</select>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    step(true);
+    $('#import-keys [data-f="label"]')?.select();
   });
   $$('[data-example]').forEach((b) => b.addEventListener('click', () => ($('#import-text').value = b.dataset.example)));
   $('#btn-help').addEventListener('click', () => $('#help-dialog').showModal());
@@ -456,10 +579,11 @@ async function main() {
   }
   const app = new App();
   window.studio = app;
-  buildPalette(app);
+  bindDemo(app);
   buildTemplateMenu(app);
   bindDialogs(app);
   bindToolbar(app);
+  app.setDemo(truthy(new URLSearchParams(location.search).get(DEMO_PARAM)), { render: false });
   $('#version').textContent = version();
 
   if (await restore(app)) {
@@ -467,7 +591,8 @@ async function main() {
     requestAnimationFrame(() => app.canvas.fit({ animate: false }));
     app.panels.setTab('paths');
   } else {
-    await app.loadTemplate(TEMPLATES[0]);
+    // Professional default: an empty wallet. Demo mode opens on a worked example.
+    await app.loadTemplate(app.demo ? TEMPLATES[0] : TEMPLATES.find((t) => t.id === 'blank'));
   }
   $('#boot').classList.add('is-done');
   setTimeout(() => $('#boot').remove(), 600);

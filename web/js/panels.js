@@ -164,7 +164,7 @@ export class Panels {
         <button class="btn btn--primary" data-do="xpub">${icon('hardware')} Add your xpub</button>
       </div>
       <div class="btn-row">
-        <button class="btn btn--ghost" data-do="gen">${icon('dice')} New demo key</button>
+        ${this.app.demo ? `<button class="btn btn--ghost" data-do="gen">${icon('dice')} New demo key</button>` : ''}
         <button class="btn btn--ghost" data-do="copykey" ${n.key ? '' : 'disabled'}>${icon('copy')} Copy</button>
       </div>
       <p class="caption">Public keys only. Export the xpub from your hardware wallet or coordinator; seed words and private keys are refused.</p>
@@ -273,7 +273,7 @@ export class Panels {
       <label class="field"><span>Network</span><select data-f="network">
         ${['bitcoin', 'testnet', 'signet', 'regtest'].map((x) => `<option value="${x}" ${x === s.network ? 'selected' : ''}>${x === 'bitcoin' ? 'Mainnet' : x[0].toUpperCase() + x.slice(1)}</option>`).join('')}
       </select></label>
-      <p class="caption">Demo keys are re-derived for the selected network.</p>`;
+      ${this.app.demo ? '<p class="caption">Demo keys are re-derived for the selected network.</p>' : ''}`;
   }
 
   bindInspector(n) {
