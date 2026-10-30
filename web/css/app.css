@@ -596,3 +596,31 @@ kbd { font-family: var(--mono); font-size: 10.5px; background: var(--raised); bo
   .palette { flex-direction: row; overflow-x: auto; }
   .sidebar { max-height: 45vh; }
 }
+
+/* key ceremony */
+.segmented--inline { width: auto; margin: 0; }
+.kc { display: grid; grid-template-columns: 1fr 230px; gap: 18px; margin-top: 4px; }
+.kc__row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.kc__row--fields { display: grid; grid-template-columns: 1fr 90px; gap: 10px; margin: 8px 0 0; }
+.kc__words {
+  list-style: none; padding: 12px; margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+  counter-reset: w; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; min-height: 120px;
+}
+.kc__words li {
+  counter-increment: w; display: flex; gap: 6px; align-items: baseline; padding: 6px 8px; border-radius: 7px;
+  background: var(--panel-2); border: 1px solid var(--line); font-family: var(--mono); font-size: 13px;
+}
+.kc__words li::before { content: counter(w); color: var(--muted); font-size: 10.5px; min-width: 16px; text-align: right; }
+.kc__words span { transition: filter 0.2s; }
+.kc__words.is-masked span { filter: blur(6px); user-select: none; }
+.kc__preview { display: grid; justify-items: center; align-content: start; gap: 8px; }
+.kc__preview .kv { width: 100%; }
+.kc__preview .caption { margin: 0; text-align: center; }
+.kc__xpub { width: 100%; text-align: left; cursor: pointer; padding: 0; font: inherit; color: inherit; }
+.kc__xpub:hover { border-color: var(--accent); }
+.kc__empty { color: var(--muted); text-align: center; padding: 40px 10px; border: 1px dashed var(--line-2); border-radius: 12px; width: 100%; }
+.kc__empty--bad { color: var(--bad); border-color: rgba(255, 107, 107, 0.4); }
+.kc__ack { margin-right: auto; display: flex; gap: 8px; align-items: center; color: var(--text-2); cursor: pointer; }
+.kc__ack input { accent-color: var(--accent); }
+.kc__ack[hidden] { display: none; }
+#kc-create[hidden], #kc-restore[hidden] { display: none; }

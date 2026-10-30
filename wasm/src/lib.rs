@@ -515,29 +515,54 @@ pub fn parse_key(input: &str) -> String {
     }
 }
 
-/// Derives a BIP-48 style account xpub from caller-supplied entropy (demo keys only).
+/// BIP-48 multisig account (m/48'/coin'/account'/2') for a BIP-32 seed.
+fn account_key(seed: &[u8], network: &str, account: u32) -> Result<Value, String> {
+    let kind = NetworkKind::from(parse_network(network));
+    let coin = if kind == NetworkKind::Main { 0 } else { 1 };
+    let secp = Secp256k1::new();
+    let master = Xpriv::new_master(kind, seed).map_err(|e| e.to_string())?;
+    let fp = master.fingerprint(&secp);
+    let hardened = |i: u32| ChildNumber::from_hardened_idx(i).map_err(|e| e.to_string());
+    let path: DerivationPath = vec![hardened(48)?, hardened(coin)?, hardened(account)?, hardened(2)?].into();
+    let xprv = master.derive_priv(&secp, &path).map_err(|e| e.to_string())?;
+    let xpub = Xpub::from_priv(&secp, &xprv);
+    let s = format!("[{}/48h/{}h/{}h/2h]{}/<0;1>/*", fp, coin, account, xpub);
+    let key = DescriptorPublicKey::from_str(&s).map_err(|e| e.to_string())?;
+    Ok(json!({
+        "key": key.to_string(),
+        "fingerprint": fp.to_string(),
+        "xpub": xpub.to_string(),
+        "path": format!("m/48'/{}'/{}'/2'", coin, account),
+    }))
+}
+
+/// Derives a BIP-48 account xpub from caller-supplied entropy used directly as the
+/// BIP-32 seed (demo keys: the private key is never shown and is discarded).
 #[wasm_bindgen]
 pub fn generate_key(entropy_hex: &str, network: &str) -> String {
+    hex_decode(entropy_hex).and_then(|seed| account_key(&seed, network, 0)).map(ok).unwrap_or_else(err)
+}
+
+/// Creates a BIP-39 mnemonic from 16 or 32 bytes of caller-supplied entropy.
+#[wasm_bindgen]
+pub fn new_mnemonic(entropy_hex: &str) -> String {
     let run = || -> Result<Value, String> {
-        let seed = hex_decode(entropy_hex)?;
-        let net = parse_network(network);
-        let kind = NetworkKind::from(net);
-        let coin = if kind == NetworkKind::Main { 0 } else { 1 };
-        let secp = Secp256k1::new();
-        let master = Xpriv::new_master(kind, &seed).map_err(|e| e.to_string())?;
-        let fp = master.fingerprint(&secp);
-        let path: DerivationPath = vec![
-            ChildNumber::from_hardened_idx(48).unwrap(),
-            ChildNumber::from_hardened_idx(coin).unwrap(),
-            ChildNumber::from_hardened_idx(0).unwrap(),
-            ChildNumber::from_hardened_idx(2).unwrap(),
-        ]
-        .into();
-        let account = master.derive_priv(&secp, &path).map_err(|e| e.to_string())?;
-        let xpub = Xpub::from_priv(&secp, &account);
-        let s = format!("[{}/48h/{}h/0h/2h]{}/<0;1>/*", fp, coin, xpub);
-        let key = DescriptorPublicKey::from_str(&s).map_err(|e| e.to_string())?;
-        Ok(json!({ "key": key.to_string(), "fingerprint": fp.to_string(), "xpub": xpub.to_string() }))
+        let entropy = hex_decode(entropy_hex)?;
+        let m = bip39::Mnemonic::from_entropy(&entropy).map_err(|e| e.to_string())?;
+        Ok(json!({ "words": m.words().collect::<Vec<_>>() }))
+    };
+    run().map(ok).unwrap_or_else(err)
+}
+
+/// Restores a BIP-39 mnemonic (+ optional passphrase) and returns its BIP-48 account xpub.
+#[wasm_bindgen]
+pub fn mnemonic_key(words: &str, passphrase: &str, network: &str, account: u32) -> String {
+    let run = || -> Result<Value, String> {
+        let normalized = words.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+        let m = bip39::Mnemonic::parse_normalized(&normalized).map_err(|e| e.to_string())?;
+        let mut v = account_key(&m.to_seed(passphrase), network, account)?;
+        v["word_count"] = json!(m.word_count());
+        Ok(v)
     };
     run().map(ok).unwrap_or_else(err)
 }
@@ -594,6 +619,26 @@ mod tests {
             assert_eq!(imported["ok"], true, "{}", imported);
             println!("import {}", imported["policy"]);
         }
+    }
+
+    #[test]
+    fn mnemonic_matches_bip39_vector() {
+        // BIP-39 test vector: all-zero entropy, passphrase "TREZOR".
+        let v: Value = serde_json::from_str(&new_mnemonic(&"00".repeat(16))).unwrap();
+        let words = v["words"].as_array().unwrap().iter().map(|w| w.as_str().unwrap()).collect::<Vec<_>>().join(" ");
+        assert_eq!(words, "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about");
+        let k: Value = serde_json::from_str(&mnemonic_key(&words, "TREZOR", "bitcoin", 0)).unwrap();
+        assert_eq!(k["ok"], true, "{}", k);
+        // Master xprv from the official BIP-39 vector; the account key must hang off it.
+        let m = bip39::Mnemonic::parse_normalized(&words).unwrap();
+        let master = Xpriv::new_master(NetworkKind::Main, &m.to_seed("TREZOR")).unwrap();
+        assert_eq!(
+            master.to_string(),
+            "xprv9s21ZrQH143K3h3fDYiay8mocZ3afhfULfb5GX8kCBdno77K4HiA15Tg23wpbeF1pLfs1c5SPmYHrEpTuuRhxMwvKDwqdKiGJS9XFKzUsAF"
+        );
+        assert_eq!(k["fingerprint"], master.fingerprint(&Secp256k1::new()).to_string());
+        let bad: Value = serde_json::from_str(&mnemonic_key("abandon abandon", "", "bitcoin", 0)).unwrap();
+        assert_eq!(bad["ok"], false);
     }
 
     #[test]

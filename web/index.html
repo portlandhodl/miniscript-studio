@@ -151,6 +151,44 @@
     </form>
   </dialog>
 
+  <dialog id="key-dialog" class="dialog dialog--wide">
+    <div class="dialog__head"><h3>Your key</h3><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <div class="segmented" id="kc-mode">
+      <button data-mode="create" class="is-active">Create new seed</button>
+      <button data-mode="restore">Restore from seed words</button>
+    </div>
+    <div class="kc">
+      <div class="kc__main">
+        <div id="kc-create">
+          <div class="kc__row">
+            <div class="segmented segmented--inline" id="kc-length">
+              <button data-len="16" class="is-active">12 words</button>
+              <button data-len="32">24 words</button>
+            </div>
+            <button class="btn" id="kc-regen" type="button">Regenerate</button>
+            <button class="btn btn--ghost" id="kc-reveal" type="button">Reveal words</button>
+          </div>
+          <ol class="kc__words is-masked" id="kc-words"></ol>
+        </div>
+        <div id="kc-restore" hidden>
+          <label class="field"><span>Seed words (12, 15, 18, 21 or 24; BIP-39 English)</span>
+            <textarea id="kc-input" rows="4" class="mono" spellcheck="false" autocomplete="off" placeholder="abandon ability able about …"></textarea></label>
+        </div>
+        <div class="kc__row kc__row--fields">
+          <label class="field"><span>Passphrase <em>optional “25th word”</em></span><input id="kc-pass" type="password" autocomplete="off"></label>
+          <label class="field kc__account"><span>Account</span><input id="kc-account" type="number" min="0" max="1000" value="0"></label>
+        </div>
+      </div>
+      <div class="kc__preview" id="kc-preview"></div>
+    </div>
+    <div class="callout callout--info" id="kc-note"></div>
+    <div class="dialog__foot">
+      <label class="kc__ack" id="kc-ack-wrap"><input type="checkbox" id="kc-ack"> I wrote these words down, in order, offline</label>
+      <button class="btn btn--ghost" data-close type="button">Cancel</button>
+      <button class="btn btn--primary" id="kc-use" type="button" disabled>Use this key</button>
+    </div>
+  </dialog>
+
   <dialog id="help-dialog" class="dialog dialog--wide">
     <div class="dialog__head"><h3>About Miniscript Studio</h3><button class="icon-btn" data-close aria-label="Close">✕</button></div>
     <div class="about">

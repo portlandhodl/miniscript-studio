@@ -11,7 +11,8 @@ export const PALETTE = [
   {
     group: 'Signers',
     items: [
-      { type: 'key', title: 'Key', desc: 'A signing device: xpub, hardware wallet, co-signer', icon: 'key', data: { role: 'hardware' } },
+      { type: 'key', title: 'Your own key', desc: 'Create fresh seed words or restore yours', icon: 'sparkle', data: { role: 'hardware', label: 'My key' }, ceremony: true },
+      { type: 'key', title: 'Key', desc: 'A signing device: paste an xpub, or use a demo key', icon: 'key', data: { role: 'hardware' } },
       { type: 'key', title: 'Vendor key', desc: 'A collaborative custody co-signer', icon: 'vendor', data: { role: 'vendor', label: 'Vendor' } },
       { type: 'key', title: 'Heir key', desc: 'Someone who inherits after a delay', icon: 'heir', data: { role: 'heir', label: 'Heir' } },
     ],
@@ -60,7 +61,10 @@ function keyBody(n, app) {
       <div class="key-card__meta">
         <div class="mono key-card__fp">${fp ? `fp ${fp}` : n.key ? esc(n.key.slice(0, 12)) + '…' : 'no key yet'}</div>
         <div class="chips">
-          ${n.seed ? '<span class="chip chip--muted">demo</span>' : n.key ? '<span class="chip chip--ok">custom</span>' : ''}
+          ${n.seed ? '<span class="chip chip--muted">demo</span>'
+            : n.origin === 'created' ? '<span class="chip chip--wallet">your seed</span>'
+            : n.origin === 'restored' ? '<span class="chip chip--wallet">restored</span>'
+            : n.key ? '<span class="chip chip--ok">custom</span>' : ''}
           ${uses > 1 ? `<span class="chip chip--key" title="Each extra use is derived on its own multipath branch">${uses} paths</span>` : ''}
         </div>
       </div>

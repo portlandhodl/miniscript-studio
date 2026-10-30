@@ -161,9 +161,14 @@ export class Panels {
         <textarea data-f="key" rows="4" class="mono" spellcheck="false" placeholder="[d34db33f/48h/0h/0h/2h]xpub…/&lt;0;1&gt;/*">${esc(n.key)}</textarea></label>
       <div id="key-feedback">${this.keyFeedback(info, mismatch)}</div>
       <div class="btn-row">
-        <button class="btn" data-do="gen">${icon('dice')} New demo key</button>
+        <button class="btn btn--primary" data-do="create">${icon('sparkle')} Create seed words</button>
+        <button class="btn" data-do="restore">${icon('import')} Restore</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn--ghost" data-do="gen">${icon('dice')} New demo key</button>
         <button class="btn btn--ghost" data-do="copykey" ${n.key ? '' : 'disabled'}>${icon('copy')} Copy</button>
       </div>
+      ${n.origin ? `<div class="callout callout--info">${icon('shield')}<span>${n.origin === 'created' ? 'Created from seed words in this browser.' : 'Restored from your seed words.'} Only the xpub is kept; the words were never stored. Your backup is the paper you wrote them on.</span></div>` : ''}
       ${n.seed ? `<div class="callout callout--info">${icon('alert')}<span>Demo key from a public seed. <b>Never send real funds to it.</b> Paste your own xpub to design a real wallet.</span></div>` : ''}
       <div class="section-title">Used in ${uses} place${uses === 1 ? '' : 's'}</div>
       <p class="caption">A key block is one signing device. Wire it into several paths and each use gets its own derivation branch (<code>&lt;0;1&gt;</code>, <code>&lt;2;3&gt;</code>, …), the same approach Liana uses, so miniscript never sees a duplicate key.</p>`;
@@ -286,15 +291,18 @@ export class Panels {
       const info = raw ? parseKey(raw) : null;
       const mismatch = info?.ok && info.mainnet != null && info.mainnet !== (m.state.network === 'bitcoin');
       $('#key-feedback').innerHTML = this.keyFeedback(info, mismatch);
-      m.update(n.id, { key: info?.ok ? info.key : raw, seed: null }, 'inspector');
+      m.update(n.id, { key: info?.ok ? info.key : raw, seed: null, origin: null }, 'inspector');
     });
     on('[data-f="key"]', 'change', () => (m.commit(), this.renderInspector()));
     on('[data-do="gen"]', 'click', () => {
+      m.update(n.id, { origin: null });
       app.assignDemoKey(n, randomHex(32));
       m.commit();
       this.renderInspector();
     });
     on('[data-do="copykey"]', 'click', () => copyText(n.key));
+    on('[data-do="create"]', 'click', () => app.keys.open(n.id, 'create'));
+    on('[data-do="restore"]', 'click', () => app.keys.open(n.id, 'restore'));
 
     // Timelocks
     on('[data-seg="older-mode"] button', 'click', (e) => {

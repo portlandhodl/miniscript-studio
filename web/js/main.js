@@ -7,6 +7,7 @@ import { PALETTE } from './blocks.js';
 import { buildPolicy } from './policy.js';
 import { parsePolicy, buildBlocks } from './parse.js';
 import { TEMPLATES } from './templates.js';
+import { KeyCeremony } from './keyceremony.js';
 import { icon } from './icons.js';
 import { $, $$, h, esc, toast, copyText, seedHex, randomHex, hexToBytes, sha256Hex, compress, decompress } from './util.js';
 
@@ -20,6 +21,7 @@ class App {
     this.result = null;
     this.canvas = new Canvas($('#canvas'), this);
     this.panels = new Panels(this);
+    this.keys = new KeyCeremony(this);
     this.canvas.app.onSelect = (id) => {
       if (id) this.panels.setTab('block');
       else if (this.panels.tab === 'block') this.panels.renderSide();
@@ -113,7 +115,7 @@ class App {
     if (item.type === 'key') data.label = this.nextKeyLabel(data.label || 'Key');
     if (item.type === 'after') data.value = 0;
     const n = m.addNode(item.type, world.x, world.y, data);
-    if (item.type === 'key') this.assignDemoKey(n, randomHex(32));
+    if (item.type === 'key' && !item.ceremony) this.assignDemoKey(n, randomHex(32));
     if (target) {
       const why = m.connect(n.id, target.parent, target.slot);
       if (why) toast(why, 'warn');
@@ -130,6 +132,7 @@ class App {
     }
     m.commit();
     this.canvas.select(n.id);
+    if (item.ceremony) this.keys.open(n.id, 'create');
     return n;
   }
 
