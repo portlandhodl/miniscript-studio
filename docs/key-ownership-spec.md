@@ -148,8 +148,10 @@ the source.
   that tab's memory. It is never saved, uploaded or included in share links.
 - The dialog lists every signer (label, group, fingerprint, key count) with a checkbox: tick
   the ones you control. The selection, not the keys, is remembered per file (by its sha256).
-- Key blocks get an **ours / known / known device / unknown / conflict** badge (plus
-  *blinded* when the origin is hidden or differs). Clicking the badge, or *Show manifest
+- Key blocks get a badge named after the signer: green when it's a signer you ticked
+  (*ours*), blue when known but not yours, "*Signer* · other account" for a known device with an
+  unlisted account, "conflict: *Signer*" for a mismatch, otherwise "unknown". *· blinded* is
+  appended when the origin is hidden or differs. Clicking the badge, or *Show manifest
   entry* in the key inspector, opens the manifest entry side by side with the descriptor:
   master fingerprint, path, xpub and key id, with differences highlighted.
 - For a blinded origin, **Restore true origin** rewrites only the key's origin to the

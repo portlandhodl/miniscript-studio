@@ -9,7 +9,7 @@ import { parsePolicy, buildBlocks } from './parse.js';
 import { TEMPLATES } from './templates.js';
 import { KeyDialog } from './keydialog.js';
 import { lifehashImg } from './lifehash.js';
-import { Ownership, OWNERSHIP_CHIPS, SPEC_URL, describeMatch, isBlinded } from './ownership.js';
+import { Ownership, SPEC_URL, describeMatch, isBlinded, ownershipBadge } from './ownership.js';
 import { icon, ROLES } from './icons.js';
 import { $, $$, h, esc, toast, copyText, seedHex, randomHex, hexToBytes, sha256Hex, compress, decompress, privateMaterial } from './util.js';
 
@@ -167,7 +167,7 @@ class App {
     const d = r.descriptor ?? {};
     const e = r.entry ?? {};
     const trueFp = r.signer?.fingerprint ?? null;
-    const [cls, text] = OWNERSHIP_CHIPS[r.kind];
+    const { cls, text } = ownershipBadge(r);
     const val = (v, none = '—') => (v == null ? `<span class="muted">${none}</span>` : `<span class="mono">${esc(String(v))}</span>`);
     const row = (label, mine, theirs, { none = '—', theirsNone = '—' } = {}) => {
       const diff = mine != null && theirs != null && mine !== theirs || (mine == null) !== (theirs == null) && theirs != null;
@@ -188,7 +188,7 @@ class App {
     } else {
       lead = `<div class="callout callout--info">${icon('alert')}<span>${esc(describeMatch(r))}</span></div>`;
     }
-    $('#ok-title').innerHTML = `${esc(n.label)} <span class="chip ${cls}">${text}</span>`;
+    $('#ok-title').innerHTML = `${esc(n.label)} <span class="chip ${cls}">${esc(text)}</span>${r.kind === 'owned' ? ' <span class="chip chip--ok">ours</span>' : ''}`;
     $('#ok-body').innerHTML = `${lead}
       ${r.signer ? `<div class="own-meta"><b>${esc(r.signer.label)}</b>${r.signer.group ? `<span>${esc(r.signer.group)}</span>` : ''}${r.signer.role ? `<span>${esc(r.signer.role)}</span>` : ''}
         ${e.account != null ? `<span>account ${e.account}</span>` : ''}${e.status ? `<span>${esc(e.status)}</span>` : ''}<span>from ${esc(this.ownership.name)}</span></div>` : ''}
@@ -681,11 +681,11 @@ function bindDialogs(app) {
       if (own?.signer && (own.kind === 'owned' || own.kind === 'known')) {
         k = { ...k, label: own.signer.label.slice(0, 24), role: own.signer.role ?? k.role };
       }
-      const [ownCls, ownText] = own ? OWNERSHIP_CHIPS[own.kind] : [];
+      const { cls: ownCls, text: ownText } = own ? ownershipBadge(own) : {};
       return `<div class="import-key" data-signer="${esc(id)}">
         ${lifehashImg(k.key, 'lifehash--lg')}
         <div class="import-key__body">
-          <div class="import-key__meta mono">${esc(meta)}${k.seed ? ' · <span class="chip chip--muted">demo</span>' : ''}${own ? ` <span class="chip ${ownCls}" title="${esc(describeMatch(own))}">${ownText}</span>` : ''}</div>
+          <div class="import-key__meta mono">${esc(meta)}${k.seed ? ' · <span class="chip chip--muted">demo</span>' : ''}${own ? ` <span class="chip ${ownCls}" title="${esc(describeMatch(own))}">${esc(ownText)}</span>` : ''}</div>
           <div class="import-key__fields">
             <input data-f="label" value="${esc(k.label)}" maxlength="24" spellcheck="false" aria-label="Key name">
             <select data-f="role" aria-label="Role">${roles(k.role)}</select>

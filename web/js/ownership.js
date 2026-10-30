@@ -103,6 +103,20 @@ export const OWNERSHIP_CHIPS = {
   unknown: ['chip--muted', 'unknown'],
 };
 
+/**
+ * Badge for a match: named after the signer. Green when it's a signer you ticked, blue when
+ * known but not yours; conflicts and unlisted accounts name the signer they point at.
+ */
+export function ownershipBadge(r) {
+  const [cls, generic] = OWNERSHIP_CHIPS[r.kind];
+  const name = r.signer?.label;
+  const text = !name ? generic
+    : r.kind === 'conflict' ? `conflict: ${name}`
+    : r.kind === 'device' ? `${name} · other account`
+    : name;
+  return { cls, text: isBlinded(r) ? `${text} · blinded` : text };
+}
+
 /** True when the descriptor's origin hides or misstates the signer the key really belongs to. */
 export const isBlinded = (r) => !!r?.originMismatch;
 
