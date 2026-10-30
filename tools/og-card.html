@@ -1,0 +1,135 @@
+<!doctype html>
+<!-- Source for web/og.png (1200×630). Render with tools/render-og.mjs. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  :root {
+    --bg: #0a0c11; --panel: #12161e; --line: #252b3a; --text: #eef0f4; --muted: #8a91a3;
+    --accent: #f7931a; --key: #5aa2ff; --time: #b18cff; --logic: #36d3b2; --good: #3ccf8e;
+    --font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  }
+  body { width: 1200px; height: 630px; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font); }
+  .card {
+    position: relative; width: 1200px; height: 630px; overflow: hidden;
+    background:
+      radial-gradient(ellipse 700px 500px at 85% 45%, rgba(247,147,26,0.13), transparent 70%),
+      radial-gradient(ellipse 600px 500px at 10% 100%, rgba(90,162,255,0.10), transparent 70%),
+      radial-gradient(circle, #1c2130 1.2px, transparent 1.4px) 0 0 / 26px 26px,
+      var(--bg);
+  }
+  .left { position: absolute; left: 64px; top: 58px; width: 520px; }
+  .sub { max-width: 500px; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand svg { width: 46px; height: 46px; }
+  .brand__name { font-size: 25px; font-weight: 700; letter-spacing: -0.01em; }
+  .brand__tag { font-size: 15px; color: var(--muted); }
+  h1 { margin-top: 74px; font-size: 52px; white-space: nowrap; line-height: 1.04; letter-spacing: -0.035em; font-weight: 800; }
+  h1 em { font-style: normal; background: linear-gradient(90deg, #ffb54d, var(--accent)); -webkit-background-clip: text; color: transparent; }
+  .sub { margin-top: 24px; font-size: 21px; line-height: 1.45; color: #b9bfcc; }
+  .sub b { color: var(--text); font-weight: 600; }
+  .pills { position: absolute; left: 64px; bottom: 54px; display: flex; gap: 10px; }
+  .pill { font-size: 15px; font-weight: 600; padding: 8px 14px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); color: #c9ceda; display: flex; align-items: center; gap: 8px; }
+  .pill i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  /* graph */
+  .graph { position: absolute; left: 630px; top: 0; width: 600px; height: 630px; }
+  .node {
+    position: absolute; width: 172px; padding: 12px 14px; border-radius: 14px;
+    background: linear-gradient(180deg, #171b25, #11141b); border: 1px solid #2c3344;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+  }
+  .node::before { content: ''; position: absolute; left: 14px; right: 14px; top: -1px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--c), transparent); }
+  .node .t { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .node .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .node .row { display: flex; align-items: center; gap: 9px; margin-top: 9px; }
+  .node img { width: 40px; height: 40px; border-radius: 9px; image-rendering: pixelated; }
+  .node .fp { font-family: var(--mono); font-size: 12px; color: #aab1c0; }
+  .k { --c: var(--key); }
+  .tl { --c: var(--time); }
+  .lg { --c: var(--logic); width: 150px; }
+  .w { --c: var(--accent); width: 214px; border-color: rgba(247,147,26,0.45); box-shadow: 0 0 0 4px rgba(247,147,26,0.10), 0 20px 50px rgba(0,0,0,0.6), 0 0 60px rgba(247,147,26,0.18); }
+  .w img { width: 64px; height: 64px; border-radius: 12px; }
+  .big { font-size: 21px; font-weight: 750; margin-top: 6px; letter-spacing: -0.01em; }
+  .chip { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; color: var(--accent); background: rgba(247,147,26,0.14); border: 1px solid rgba(247,147,26,0.3); }
+  .ok { white-space: nowrap; color: var(--good); font-size: 13px; font-weight: 700; margin-top: 6px; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; background: var(--c); box-shadow: 0 0 10px var(--c); }
+  svg.wires { position: absolute; inset: 0; overflow: visible; }
+  svg.wires path { fill: none; stroke-width: 2.6; }
+
+  .phases { position: absolute; right: 40px; bottom: 40px; display: flex; gap: 10px; }
+  .phase { padding: 10px 14px; border-radius: 12px; background: rgba(18,22,30,0.92); border: 1px solid var(--line); min-width: 160px; }
+  .phase .when { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+  .phase .v { font-size: 22px; font-weight: 800; margin-top: 2px; }
+  .phase .v small { font-size: 13px; color: var(--muted); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="left">
+    <div class="brand">
+      <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#f7931a"/><path d="M9 22V10l7 7 7-7v12" stroke="#0b0d12" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div><div class="brand__name">Miniscript Studio</div><div class="brand__tag">Visual spending policies for Bitcoin</div></div>
+    </div>
+    <h1>Design self&#8209;custody<br>you can <em>survive.</em></h1>
+    <p class="sub">Drag keys, timelocks and logic into a real Bitcoin wallet. See <b>who must sign, what you can lose, and when the way out opens.</b></p>
+  </div>
+  <div class="pills">
+    <span class="pill"><i style="background:#f7931a"></i>rust-miniscript · WASM</span>
+    <span class="pill"><i style="background:#5aa2ff"></i>LifeHash</span>
+    <span class="pill"><i style="background:#36d3b2"></i>No server</span>
+  </div>
+
+  <div class="graph">
+    <svg class="wires" id="wires"></svg>
+    <div class="node k" id="kA" style="left:0;top:40px"><div class="t"><span class="dot"></span>Vendor A</div><div class="row"><img data-lh="Vendor_A"><span class="fp" data-fp="Vendor_A"></span></div></div>
+    <div class="node k" id="kB" style="left:0;top:146px"><div class="t"><span class="dot"></span>Vendor B</div><div class="row"><img data-lh="Vendor_B"><span class="fp" data-fp="Vendor_B"></span></div></div>
+    <div class="node k" id="kY" style="left:0;top:252px"><div class="t"><span class="dot"></span>You</div><div class="row"><img data-lh="You"><span class="fp" data-fp="You"></span></div></div>
+    <div class="node tl" id="t1" style="left:0;top:358px"><div class="t"><span class="dot"></span>Wait</div><div class="big">≈ 1 year</div></div>
+    <div class="node lg" id="th" style="left:212px;top:118px"><div class="t"><span class="dot"></span>2 of 3</div><div class="s">thresh · everyday</div></div>
+    <div class="node lg" id="an" style="left:212px;top:300px"><div class="t"><span class="dot"></span>All of</div><div class="s">escape hatch</div></div>
+    <div class="node w" id="wa" style="left:374px;top:448px;width:206px;display:none"></div>
+  </div>
+  <div class="node w" id="wallet" style="left:1004px;top:190px;width:178px">
+    <div class="t"><span class="dot"></span>Vault</div>
+    <div class="row"><img id="desc-lh"><div><span class="chip">P2WSH</span><div class="ok">✓ Compiled</div></div></div>
+  </div>
+  <div class="phases">
+    <div class="phase"><div class="when">Day one</div><div class="v">2 <small>of 3 sign</small></div></div>
+    <div class="phase"><div class="when">After 1 year</div><div class="v">1 <small>key recovers</small></div></div>
+  </div>
+</div>
+<script type="module">
+  import { loadWasm, generateKey, compile } from '/web/js/wasm.js';
+  import { lifehash } from '/web/js/lifehash.js';
+  import { seedHex } from '/web/js/util.js';
+  await loadWasm();
+  const keys = {};
+  for (const ref of ['Vendor_A', 'Vendor_B', 'You']) {
+    keys[ref] = generateKey(seedHex(`miniscript-studio/escape-hatch/${ref}`), 'signet').key;
+    document.querySelector(`[data-lh="${ref}"]`).src = lifehash(keys[ref]);
+    document.querySelector(`[data-fp="${ref}"]`).textContent = 'fp ' + keys[ref].slice(1, 9);
+  }
+  keys.You_2 = keys.You.replace('<0;1>', '<2;3>');
+  const r = compile({ policy: 'or(99@thresh(2,pk(Vendor_A),pk(Vendor_B),pk(You)),1@and(pk(You_2),older(52560)))', keys, context: 'wsh', network: 'signet' });
+  document.querySelector('#desc-lh').src = lifehash(r.descriptor);
+
+  // Wires: right-middle of child -> left of parent.
+  const svg = document.querySelector('#wires');
+  const card = document.querySelector('.graph').getBoundingClientRect();
+  const out = (id) => { const b = document.getElementById(id).getBoundingClientRect(); return [b.right - card.left, b.top + 26 - card.top]; };
+  const inp = (id, i) => { const b = document.getElementById(id).getBoundingClientRect(); return [b.left - card.left, b.top + 30 + i * 14 - card.top]; };
+  const wire = ([x1, y1], [x2, y2], c, glow) => {
+    const dx = Math.max(50, (x2 - x1) * 0.5);
+    svg.insertAdjacentHTML('beforeend', `<path d="M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}" stroke="${c}" ${glow ? `style="filter:drop-shadow(0 0 6px ${c})"` : 'opacity="0.75"'}/>`);
+  };
+  const K = '#5aa2ff', T = '#b18cff', L = '#36d3b2';
+  wire(out('kA'), inp('th', 0), K); wire(out('kB'), inp('th', 1), K); wire(out('kY'), inp('th', 2), K);
+  wire(out('kY'), inp('an', 0), K); wire(out('t1'), inp('an', 1), T);
+  wire(out('th'), inp('wallet', 0), L, true); wire(out('an'), inp('wallet', 1), L, true);
+  document.body.dataset.ready = '1';
+</script>
+</body>
+</html>
