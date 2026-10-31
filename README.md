@@ -24,20 +24,25 @@
 
 ## Develop
 
-Requirements: Rust with the `wasm32-unknown-unknown` target, [wasm-pack](https://drager.github.io/wasm-pack/), and clang (to build libsecp256k1 for WASM).
+Requirements: Rust with the `wasm32-unknown-unknown` target, [wasm-pack](https://drager.github.io/wasm-pack/), clang (to build libsecp256k1 for WASM), and Node 18+ (for the single-file bundle).
 
 ```sh
-./build.sh                         # builds wasm/ into web/pkg
-python3 -m http.server -d web 8000 # open http://localhost:8000
+./build.sh                         # builds wasm/ into web/pkg, then dist/index.html
+python3 -m http.server -d web 8000 # develop: open http://localhost:8000
 cargo test --release --manifest-path wasm/Cargo.toml
 ```
 
-The frontend is plain ES modules in `web/js/`, with no bundler and no build step beyond the WASM.
+The frontend is plain ES modules in `web/js/`, with no bundler needed during development.
+
+### Single-file artifact
+
+`./build.sh` also produces **`dist/index.html`: the entire studio in one file.** All JavaScript is bundled inline (esbuild), the CSS is inlined, and the WASM module is embedded as gzip + base64 and decompressed in the browser. The file makes no other requests: open it straight from disk (`file://`), mail it, archive it, or host it anywhere. Its sha256 identifies exactly what you are running. `tools/build-single.mjs` fails the build if anything still references an external script, stylesheet or `.wasm` file. GitHub Pages publishes only this file (plus `og.png`, used solely for link-preview cards).
 
 | Path | Purpose |
 |---|---|
 | `wasm/src/lib.rs` | WASM bridge: compile, plan, import/lift, key parsing, demo keys, LifeHash |
 | `wasm/src/kom.rs` | Key Ownership Manifest validation and key matching |
+| `tools/build-single.mjs` | Bundles `web/` + the WASM into the single-file `dist/index.html` |
 | `web/js/ownership.js` | Manifest loading, "we control" selection, match results |
 | `web/js/model.js` | Block graph, connection rules, undo history |
 | `web/js/policy.js` | Blocks → policy, spending-path enumeration, custody analysis, simulation |
@@ -47,7 +52,7 @@ The frontend is plain ES modules in `web/js/`, with no bundler and no build step
 
 ## Deploy to GitHub Pages
 
-Push to `main` with **Settings → Pages → Source: GitHub Actions** enabled. `.github/workflows/pages.yml` runs the tests, builds the WASM and publishes `web/`.
+Push to `main` with **Settings → Pages → Source: GitHub Actions** enabled. `.github/workflows/pages.yml` runs the tests, builds the WASM, bundles `dist/index.html` and publishes it.
 
 ## ⚠️ Safety
 

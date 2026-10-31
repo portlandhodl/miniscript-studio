@@ -1,5 +1,7 @@
 wasm/target/
 web/pkg/
+dist/
+tools/node_modules/
 
 # Organisation-specific key profiles and manifests: never publish
 private/

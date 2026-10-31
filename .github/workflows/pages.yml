@@ -25,15 +25,23 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: wasm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/package-lock.json
       - name: Install wasm-pack
         run: curl https://drager.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Install build tools
+        run: npm ci --prefix tools --no-audit --no-fund
       - name: Test
         run: cargo test --release --manifest-path wasm/Cargo.toml
-      - name: Build WASM
+      - name: Build WASM and single-file app
         run: ./build.sh
+      # Only the self-contained dist/index.html is published (og.png is just the link-preview image).
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: web
+          path: dist
 
   deploy:
     needs: build

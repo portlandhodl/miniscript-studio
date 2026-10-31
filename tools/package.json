@@ -1,0 +1,12 @@
+{
+  "name": "miniscript-studio-tools",
+  "private": true,
+  "description": "Build tooling: bundles web/ into a single self-contained index.html",
+  "type": "module",
+  "scripts": {
+    "build:single": "node build-single.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.11"
+  }
+}
