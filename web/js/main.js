@@ -11,7 +11,7 @@ import { KeyDialog } from './keydialog.js';
 import { lifehashImg } from './lifehash.js';
 import { Ownership, SPEC_URL, describeMatch, isBlinded, ownershipBadge } from './ownership.js';
 import { icon, ROLES } from './icons.js';
-import { $, $$, h, esc, toast, copyText, seedHex, randomHex, hexToBytes, sha256Hex, compress, decompress, privateMaterial } from './util.js';
+import { $, $$, h, esc, toast, copyText, seedHex, randomHex, hexToBytes, sha256Hex, compress, decompress, privateMaterial, setReference, dateToSec } from './util.js';
 
 const STORAGE_KEY = 'miniscript-studio:v1';
 const DEMO_STORAGE_KEY = 'miniscript-studio:demo:v1';
@@ -61,6 +61,7 @@ class App {
   // -- core loop -----------------------------------------------------------
   refresh(kind = 'full') {
     const m = this.model;
+    setReference(dateToSec(m.state.birthday));
     this.built = buildPolicy(m);
     this.nodeErrors = new Map();
     for (const e of this.built.errors) if (!this.nodeErrors.has(e.id)) this.nodeErrors.set(e.id, e.msg);

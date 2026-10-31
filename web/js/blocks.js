@@ -4,7 +4,7 @@ import { icon, ROLES } from './icons.js';
 import { lifehashImg } from './lifehash.js';
 import { ownershipBadge, describeMatch, isBlinded } from './ownership.js';
 import {
-  esc, fmtDuration, fmtInt, fmtDate, olderSeconds, olderIsTime, afterIsTime, afterSecondsFromNow,
+  esc, fmtDuration, fmtInt, fmtDate, olderSeconds, olderIsTime, afterIsTime, afterSecondsFromNow, afterSecondsFromRef, refSec,
   describeOlder,
 } from './util.js';
 
@@ -80,7 +80,8 @@ function timeBody(n) {
   const v = Number(n.value);
   if (n.type === 'older') {
     return `<div class="big-value">${fmtDuration(olderSeconds(v))}</div>
-      <div class="mono muted">older(${fmtInt(v)}) · ${olderIsTime(v) ? 'time-based' : describeOlder(v)}</div>`;
+      <div class="mono muted">older(${fmtInt(v)}) · ${olderIsTime(v) ? 'time-based' : describeOlder(v)}</div>
+      <div class="muted small">opens ≈ ${fmtDate(refSec() + olderSeconds(v))} if unmoved</div>`;
   }
   if (!v) return `<div class="muted">Pick a date or block height</div>`;
   const left = afterSecondsFromNow(v);
@@ -89,7 +90,7 @@ function timeBody(n) {
 }
 
 const timelockWait = (c) =>
-  c.type === 'older' ? olderSeconds(Number(c.value)) : Math.max(0, afterSecondsFromNow(Number(c.value)));
+  c.type === 'older' ? olderSeconds(Number(c.value)) : Math.max(0, afterSecondsFromRef(Number(c.value)));
 
 /**
  * For a threshold that mixes timelocks with other inputs: how many of the other

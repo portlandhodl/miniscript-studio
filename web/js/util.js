@@ -9,6 +9,27 @@ const ANCHOR_HEIGHT = 840_000;
 const ANCHOR_TIME = 1713571200; // 2024-04-20, the 4th halving
 
 export const nowSec = () => Math.floor(Date.now() / 1000);
+
+// Vault birthday: the moment the coins were received, which every timelock analysis
+// counts from. `null` means "today". Set once per refresh from the design.
+let reference = null;
+/** `YYYY-MM-DD` (local midnight, as picked in the calendar) → unix seconds, or null if empty / invalid. */
+export function dateToSec(d) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d ?? '');
+  if (!m) return null;
+  const t = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime();
+  return Number.isFinite(t) ? Math.floor(t / 1000) : null;
+}
+/** Unix seconds → local `YYYY-MM-DD`. */
+export function secToDate(t) {
+  const d = new Date(t * 1000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+export const setReference = (ts) => (reference = ts ?? null);
+export const refSec = () => reference ?? nowSec();
+export const hasReference = () => reference != null;
+/** Seconds from the vault birthday until an absolute timelock is reached (negative: before birth). */
+export const afterSecondsFromRef = (v) => afterSecondsFromNow(v, refSec());
 export const estimateTipHeight = (t = nowSec()) =>
   ANCHOR_HEIGHT + Math.floor((t - ANCHOR_TIME) / BLOCK_SECONDS);
 

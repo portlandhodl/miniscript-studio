@@ -8,7 +8,7 @@ import { parseKey } from './wasm.js';
 import { describeMatch } from './ownership.js';
 import {
   $, $$, esc, fmtDuration, fmtInt, fmtDate, olderSeconds, olderIsTime, afterIsTime, afterSecondsFromNow,
-  estimateTipHeight, nowSec, SEQUENCE_TYPE_FLAG, copyText, randomHex, hexToBytes, sha256Hex, download, toast, privateMaterial,
+  estimateTipHeight, nowSec, refSec, hasReference, afterSecondsFromRef, secToDate, SEQUENCE_TYPE_FLAG, copyText, randomHex, hexToBytes, sha256Hex, download, toast, privateMaterial,
 } from './util.js';
 
 const DAY = 86400;
@@ -431,9 +431,13 @@ export class Panels {
     // Which timelock blocks expire at each moment: the cause of each new phase.
     const reach = app.model.reachable();
     const timelocks = Object.values(app.model.nodes).filter((x) => reach.has(x.id) && (x.type === 'older' || (x.type === 'after' && x.value)));
-    const waitOf = (x) => (x.type === 'older' ? olderSeconds(Number(x.value)) : Math.max(0, afterSecondsFromNow(Number(x.value))));
+    const waitOf = (x) => (x.type === 'older' ? olderSeconds(Number(x.value)) : Math.max(0, afterSecondsFromRef(Number(x.value))));
+    const ref = refSec();
+    const today = nowSec() - ref;
+    // The phase in force today, when the vault was funded in the past.
+    const current = today > 0 ? phases.reduce((c, ph, i) => (ph.t <= today ? i : c), -1) : -1;
     const phaseHTML = phases.map((ph, pi) => {
-      const when = ph.t === 0 ? 'From day one' : `After ${fmtDuration(ph.t)}`;
+      const when = `${ph.t === 0 ? 'From day one' : `After ${fmtDuration(ph.t)}`} <span class="phase__date">${fmtDate(ref + ph.t)}</span>${pi === current ? ' <span class="chip chip--ok">now</span>' : ''}`;
       const causes = ph.t > 0 ? timelocks.filter((x) => Math.abs(waitOf(x) - ph.t) < 1) : [];
       const prev = phases[pi - 1];
       const delta = prev?.minSigners != null && ph.minSigners != null ? prev.minSigners - ph.minSigners : 0;
@@ -460,8 +464,8 @@ export class Panels {
       const isKeyPath = r?.context === 'tr' && r.key_path_spendable && p.uses.length === 1 && p.uses[0] === r.internal_key && !p.wait && !p.hashes.size;
       const own = this.pathOwnership(p);
       const conds = [];
-      if (p.olderBlocks) conds.push(`${icon('clock')} wait ${fmtDuration(olderSeconds(p.olderBlocks))}`);
-      if (p.olderTime) conds.push(`${icon('clock')} wait ${fmtDuration(olderSeconds(p.olderTime))}`);
+      if (p.olderBlocks) conds.push(`${icon('clock')} wait ${fmtDuration(olderSeconds(p.olderBlocks))} · ${fmtDate(ref + olderSeconds(p.olderBlocks))}`);
+      if (p.olderTime) conds.push(`${icon('clock')} wait ${fmtDuration(olderSeconds(p.olderTime))} · ${fmtDate(ref + olderSeconds(p.olderTime))}`);
       if (p.afterHeight) conds.push(`${icon('calendar')} after block ${fmtInt(p.afterHeight)}`);
       if (p.afterTime) conds.push(`${icon('calendar')} after ${fmtDate(p.afterTime)}`);
       if (p.hashes.size) conds.push(`${icon('hash')} reveal secret`);
@@ -480,6 +484,7 @@ export class Panels {
     }).join('');
 
     this.side.innerHTML = `
+      ${this.birthdayHTML()}
       <div class="section-title">Custody over time</div>
       <p class="caption">Fault tolerance against interactivity. As time passes, fallback paths open: fewer signers are needed and lost keys become survivable.</p>
       <div class="phases">${phaseHTML}</div>
@@ -489,6 +494,7 @@ export class Panels {
       <p class="caption">Hover a path to highlight it on the canvas. Costs are full input sizes from rust-miniscript’s spend planner.</p>
       <div class="path-list">${cards}</div>`;
 
+    this.bindBirthday();
     $$('.path-card, .tl-row', this.side).forEach((el) => {
       const i = Number(el.dataset.path);
       el.addEventListener('mouseenter', () => {
@@ -502,6 +508,33 @@ export class Panels {
     });
   }
 
+  /** Vault birthday picker: the date the coins were received; all timings count from it. */
+  birthdayHTML() {
+    const b = this.app.model.state.birthday;
+    const age = b ? nowSec() - refSec() : 0;
+    return `<div class="birthday">
+      <label class="birthday__field"><span class="birthday__label">${icon('calendar')} Vault birthday</span>
+        <input type="date" class="birthday__input" data-f="birthday" value="${esc(b ?? secToDate(nowSec()))}" max="2100-12-31"></label>
+      ${b ? '<button class="btn btn--ghost btn--sm" data-do="birthday-clear" title="Count from today instead">Use today</button>' : ''}
+      <div class="birthday__note">${b
+        ? age > 0 ? `Funded ${fmtDuration(age)} ago. Timelocks count from this date.` : age < 0 ? `Funding planned in ${fmtDuration(-age)}. Timelocks count from this date.` : 'Funded today.'
+        : 'When the coins were received. Relative timelocks count from here. Defaults to today.'}</div>
+    </div>`;
+  }
+
+  bindBirthday() {
+    const m = this.app.model;
+    $('[data-f="birthday"]', this.side)?.addEventListener('change', (e) => {
+      const v = e.target.value;
+      m.setGlobal({ birthday: v && v !== secToDate(nowSec()) ? v : null });
+      m.commit();
+    });
+    $('[data-do="birthday-clear"]', this.side)?.addEventListener('click', () => {
+      m.setGlobal({ birthday: null });
+      m.commit();
+    });
+  }
+
   avatar(deviceId, size = '') {
     const k = this.app.model.node(deviceId);
     return `<span class="avatar ${size}" title="${esc(k?.label)}">${lifehashImg(k?.key)}</span>`;
@@ -510,7 +543,8 @@ export class Panels {
   timelineSVG(paths) {
     const W = 340, rowH = 30, left = 104, right = 12, top = 8, axisH = 22;
     const maxWait = Math.max(...paths.map((p) => p.wait));
-    const T = Math.max(maxWait * 1.25, 30 * DAY);
+    const today = nowSec() - refSec();
+    const T = Math.max(maxWait * 1.25, today * 1.1, 30 * DAY);
     const x = (t) => left + (Math.min(t, T) / T) * (W - left - right);
     const steps = [DAY, 7 * DAY, 30 * DAY, 90 * DAY, 182 * DAY, 365 * DAY, 730 * DAY, 1826 * DAY, 3652 * DAY];
     const step = steps.find((s) => T / s <= 5) ?? steps[steps.length - 1];
@@ -536,8 +570,11 @@ export class Panels {
     }).join('');
     const axisY = top + paths.length * rowH + 4;
     const tickHTML = ticks.map((t) => `<g><line x1="${x(t)}" x2="${x(t)}" y1="${top}" y2="${axisY}" class="tl-grid"/>
-      <text x="${x(t)}" y="${axisY + 13}" class="tl-tick" text-anchor="middle">${t === 0 ? 'now' : fmtDuration(t, { short: true })}</text></g>`).join('');
-    return `<svg class="timeline" viewBox="0 0 ${W} ${H}" role="img" aria-label="When each spending path unlocks">${tickHTML}${rows}</svg>`;
+      <text x="${x(t)}" y="${axisY + 13}" class="tl-tick" text-anchor="middle">${t === 0 ? (hasReference() ? 'funded' : 'now') : fmtDuration(t, { short: true })}</text></g>`).join('');
+    const todayHTML = today > 0
+      ? `<g class="tl-today"><line x1="${x(today)}" x2="${x(today)}" y1="${top - 4}" y2="${axisY}"/><text x="${x(today) - 3}" y="${top + 4}" text-anchor="end">today</text></g>`
+      : '';
+    return `<svg class="timeline" viewBox="0 0 ${W} ${H}" role="img" aria-label="When each spending path unlocks">${tickHTML}${rows}${todayHTML}</svg>`;
   }
 
   // ======================================================================
@@ -557,10 +594,18 @@ export class Panels {
     this.sim.seen = new Set(devices);
     const hashes = Object.values(app.model.nodes).filter((n) => n.type === 'hash' && app.model.reachable().has(n.id));
     const maxWait = Math.max(...built.paths.map((p) => p.wait));
-    const T = Math.max(maxWait * 1.25, 30 * DAY);
+    const today = nowSec() - refSec();
+    const T = Math.max(maxWait * 1.25, today * 1.1, 30 * DAY);
+    // A vault funded in the past opens the rehearsal at today.
+    if (this.sim.ref !== refSec()) {
+      this.sim.ref = refSec();
+      this.sim.elapsed = Math.max(0, today);
+    }
     this.sim.elapsed = Math.min(this.sim.elapsed, T);
+    const step = Math.max(600, Math.round(T / 500));
 
     this.side.innerHTML = `
+      ${this.birthdayHTML()}
       <div class="section-title">What do you still have?</div>
       <div class="sim-devices">
         ${devices.map((d) => {
@@ -575,13 +620,14 @@ export class Panels {
             <span class="sim-device__state">${this.sim.known.has(hn.id) ? 'known' : 'unknown'}</span></button>`).join('')}
       </div>
       <div class="section-title">How much time has passed?</div>
-      <input type="range" class="wide" id="sim-time" min="0" max="${T}" step="${Math.max(600, Math.round(T / 500))}" value="${this.sim.elapsed}" list="sim-marks">
+      <input type="range" class="wide" id="sim-time" min="0" max="${T}" step="${step}" value="${this.sim.elapsed}" list="sim-marks">
       <datalist id="sim-marks">${[...new Set(built.paths.map((p) => p.wait))].map((w) => `<option value="${w}"></option>`).join('')}</datalist>
-      <div class="sim-marks">${[...new Set(built.paths.map((p) => p.wait))].filter((w) => w > 0).map((w) =>
-        `<button class="chip chip--btn" data-jump="${w}">${fmtDuration(w, { short: true })}</button>`).join('')}</div>
+      <div class="sim-marks">${today > 0 ? `<button class="chip chip--btn chip--today" data-jump="${today}">today</button>` : ''}${[...new Set(built.paths.map((p) => p.wait))].filter((w) => w > 0).map((w) =>
+        `<button class="chip chip--btn" data-jump="${w}" title="${fmtDate(refSec() + w)}">${fmtDuration(w, { short: true })}</button>`).join('')}</div>
       <div class="sim-time" id="sim-time-label"></div>
       <div id="sim-result"></div>`;
 
+    this.bindBirthday();
     $$('[data-dev]', this.side).forEach((b) => b.addEventListener('click', () => {
       const d = b.dataset.dev;
       this.sim.available.has(d) ? this.sim.available.delete(d) : this.sim.available.add(d);
@@ -609,9 +655,10 @@ export class Panels {
     const built = app.built;
     const r = app.result;
     const { available, known, elapsed } = this.sim;
-    const now = nowSec();
+    const now = refSec();
+    const isToday = hasReference() && Math.abs(nowSec() - now - elapsed) < DAY;
     $('#sim-time-label').innerHTML = elapsed
-      ? `<b>+ ${fmtDuration(elapsed, { approx: false })}</b> <span class="muted">· ${fmtDate(now + elapsed)} · ≈ block ${fmtInt(estimateTipHeight(now + elapsed))}</span>`
+      ? `<b>+ ${fmtDuration(elapsed, { approx: false })}</b> since funding <span class="muted">· ${fmtDate(now + elapsed)}${isToday ? ' (today)' : ''} · ≈ block ${fmtInt(estimateTipHeight(now + elapsed))}</span>`
       : `<b>Right after funding</b> <span class="muted">· ${fmtDate(now)}</span>`;
 
     const sat = evaluate(app.model, { available, known, elapsed, now });

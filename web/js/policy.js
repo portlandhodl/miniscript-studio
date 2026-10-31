@@ -1,6 +1,6 @@
 // Block tree -> concrete policy, key map, spending paths and custody analysis.
 import { hasInputs } from './model.js';
-import { combinations, olderIsTime, olderSeconds, afterIsTime, afterSecondsFromNow, SEQUENCE_TYPE_FLAG } from './util.js';
+import { combinations, olderIsTime, olderSeconds, afterIsTime, afterSecondsFromNow, afterSecondsFromRef, SEQUENCE_TYPE_FLAG } from './util.js';
 
 const MAX_PATHS = 256;
 const RESERVED = new Set(['UNSPENDABLE', 'pk', 'pkh', 'and', 'or', 'thresh', 'older', 'after', 'sha256', 'multi', 'multi_a']);
@@ -217,8 +217,8 @@ function decoratePaths(paths, root, hashHex) {
     const wait = Math.max(
       p.olderBlocks ? olderSeconds(p.olderBlocks) : 0,
       p.olderTime ? olderSeconds(p.olderTime) : 0,
-      p.afterHeight ? afterSecondsFromNow(p.afterHeight) : 0,
-      p.afterTime ? afterSecondsFromNow(p.afterTime) : 0,
+      p.afterHeight ? afterSecondsFromRef(p.afterHeight) : 0,
+      p.afterTime ? afterSecondsFromRef(p.afterTime) : 0,
     );
     p.nodes.add(root.id);
     return {
