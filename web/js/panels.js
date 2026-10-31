@@ -6,6 +6,7 @@ import { blockSummary, decaySchedule, ladderHTML } from './blocks.js';
 import { custodyPhases, evaluate } from './policy.js';
 import { parseKey } from './wasm.js';
 import { describeMatch } from './ownership.js';
+import { openDatePicker } from './datepicker.js';
 import {
   $, $$, esc, fmtDuration, fmtInt, fmtDate, olderSeconds, olderIsTime, afterIsTime, afterSecondsFromNow,
   estimateTipHeight, nowSec, refSec, hasReference, afterSecondsFromRef, secToDate, SEQUENCE_TYPE_FLAG, copyText, randomHex, hexToBytes, sha256Hex, download, toast, privateMaterial,
@@ -514,7 +515,7 @@ export class Panels {
     const age = b ? nowSec() - refSec() : 0;
     return `<div class="birthday">
       <label class="birthday__field"><span class="birthday__label">${icon('calendar')} Vault birthday</span>
-        <input type="date" class="birthday__input" data-f="birthday" value="${esc(b ?? secToDate(nowSec()))}" max="2100-12-31"></label>
+        <button type="button" class="birthday__input" data-f="birthday" aria-haspopup="dialog" title="Choose the date the coins were received">${fmtDate(refSec())} ${icon('calendar')}</button></label>
       ${b ? '<button class="btn btn--ghost btn--sm" data-do="birthday-clear" title="Count from today instead">Use today</button>' : ''}
       <div class="birthday__note">${b
         ? age > 0 ? `Funded ${fmtDuration(age)} ago. Timelocks count from this date.` : age < 0 ? `Funding planned in ${fmtDuration(-age)}. Timelocks count from this date.` : 'Funded today.'
@@ -524,10 +525,12 @@ export class Panels {
 
   bindBirthday() {
     const m = this.app.model;
-    $('[data-f="birthday"]', this.side)?.addEventListener('change', (e) => {
-      const v = e.target.value;
+    const set = (v) => {
       m.setGlobal({ birthday: v && v !== secToDate(nowSec()) ? v : null });
       m.commit();
+    };
+    $('[data-f="birthday"]', this.side)?.addEventListener('click', (e) => {
+      openDatePicker(e.currentTarget, m.state.birthday ?? secToDate(nowSec()), set);
     });
     $('[data-do="birthday-clear"]', this.side)?.addEventListener('click', () => {
       m.setGlobal({ birthday: null });

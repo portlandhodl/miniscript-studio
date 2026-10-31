@@ -558,6 +558,30 @@ kbd { font-family: var(--mono); font-size: 10.5px; background: var(--raised); bo
   color: var(--text); font: inherit; font-size: 12.5px; color-scheme: dark;
 }
 .birthday__input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.birthday__input { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }
+.birthday__input:hover { border-color: #3a4256; }
+.birthday__input .icon { width: 14px; height: 14px; color: var(--muted); }
+.datepicker {
+  position: fixed; z-index: 300; width: 272px; padding: 10px; border-radius: 12px; background: var(--panel-2);
+  border: 1px solid var(--line-2); box-shadow: var(--shadow); animation: pop 0.14s ease-out;
+}
+.datepicker__head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; }
+.datepicker__head .icon-btn { font-size: 18px; line-height: 1; }
+.datepicker__title { display: flex; gap: 6px; }
+.datepicker__title select {
+  height: 28px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--bg-2); color: var(--text);
+  font: inherit; font-size: 12.5px; color-scheme: dark;
+}
+.datepicker__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.datepicker__dow { text-align: center; font-size: 10.5px; color: var(--muted); padding: 4px 0; }
+.datepicker__grid button {
+  height: 32px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--text-2);
+  font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.datepicker__grid button:hover, .datepicker__grid button:focus-visible { background: var(--raised); color: var(--text); outline: none; border-color: var(--line-2); }
+.datepicker__grid button.is-today { color: var(--good); border-color: rgba(60, 207, 142, 0.35); }
+.datepicker__grid button.is-selected { background: var(--accent); color: #111; font-weight: 650; border-color: var(--accent); }
+.datepicker__foot { display: flex; justify-content: space-between; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .birthday__note { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px; }
 .tl-today line { stroke: var(--good); stroke-width: 1.5; stroke-dasharray: 3 3; }
 .tl-today text { fill: var(--good); font-size: 10px; font-family: var(--font); }
